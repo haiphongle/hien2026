@@ -45,9 +45,9 @@ the timeline. These demo previews were shared by the FrameWeaver maintainer.
     <th width="33%">2D family stories</th>
   </tr>
   <tr>
-    <td valign="top"><a href="docs/images/showcase/karma-story-short.png"><img src="docs/images/showcase/karma-story-short.png" width="260" alt="Vertical illustrated story with a turtle scene, title, and Vietnamese subtitles" /></a></td>
-    <td valign="top"><a href="docs/images/showcase/stickman-family-short.png"><img src="docs/images/showcase/stickman-family-short.png" width="260" alt="Stickman family story with a father, mother, child, and narration captions" /></a></td>
-    <td valign="top"><a href="docs/images/showcase/illustrated-family-short.png"><img src="docs/images/showcase/illustrated-family-short.png" width="260" alt="2D family story with an illustrated mother and child, title, and subtitles" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/showcase/karma-story-short.png"><img src="docs/images/showcase/karma-story-short.png" width="220" alt="Vertical illustrated story with a turtle scene, title, and Vietnamese subtitles" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/showcase/stickman-family-short.png"><img src="docs/images/showcase/stickman-family-short.png" width="245" alt="Stickman family story with a father, mother, child, and narration captions" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/showcase/illustrated-family-short.png"><img src="docs/images/showcase/illustrated-family-short.png" width="245" alt="2D family story with an illustrated mother and child, title, and subtitles" /></a></td>
   </tr>
   <tr>
     <td>Atmospheric illustrations, a story title, and timed narration.</td>
@@ -227,7 +227,7 @@ for compatibility with the base implementation. See [BRANDING.md](BRANDING.md).
   explicitly enabled fallbacks have different behavior; consult
   [the transport notes](docs/CAPTURE.md).
 - Generation depends on Google Flow's current browser behavior and your account.
-  Live generation has not been re-verified for this renamed release.
+  Live generation has not been re-verified for this preview release.
 - External macOS volumes exposed AppleDouble (`._*`) discovery and modification-time
   cache failures during packaging checks. For a macOS trial, use native APFS
   working data and temporary directories. Packaging excludes metadata files but
@@ -277,8 +277,8 @@ inference and live Google Flow generation are not part of those checks.
 ## Roadmap
 
 The next priorities are a reproducible first-run experience, external-volume
-compatibility, broader platform validation, and a demonstration produced directly
-with FrameWeaver. Proposed changes are welcome through
+compatibility, broader platform validation, and video walkthroughs showing
+the FrameWeaver workflow. Proposed changes are welcome through
 [issues](https://github.com/phucnguyentvp1/frameweaver/issues).
 
 ## License and acknowledgements

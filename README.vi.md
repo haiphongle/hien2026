@@ -28,9 +28,9 @@ Dưới đây là các ảnh demo do người duy trì FrameWeaver cung cấp.
     <th width="33%">Truyện gia đình 2D</th>
   </tr>
   <tr>
-    <td valign="top"><a href="docs/images/showcase/karma-story-short.png"><img src="docs/images/showcase/karma-story-short.png" width="260" alt="Video dọc minh họa truyện nhân quả, có tiêu đề và phụ đề tiếng Việt" /></a></td>
-    <td valign="top"><a href="docs/images/showcase/stickman-family-short.png"><img src="docs/images/showcase/stickman-family-short.png" width="260" alt="Câu chuyện người que về gia đình, có nhân vật cha, mẹ, con và phụ đề" /></a></td>
-    <td valign="top"><a href="docs/images/showcase/illustrated-family-short.png"><img src="docs/images/showcase/illustrated-family-short.png" width="260" alt="Truyện gia đình bằng minh họa 2D, có tiêu đề và phụ đề" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/showcase/karma-story-short.png"><img src="docs/images/showcase/karma-story-short.png" width="220" alt="Video dọc minh họa truyện nhân quả, có tiêu đề và phụ đề tiếng Việt" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/showcase/stickman-family-short.png"><img src="docs/images/showcase/stickman-family-short.png" width="245" alt="Câu chuyện người que về gia đình, có nhân vật cha, mẹ, con và phụ đề" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/showcase/illustrated-family-short.png"><img src="docs/images/showcase/illustrated-family-short.png" width="245" alt="Truyện gia đình bằng minh họa 2D, có tiêu đề và phụ đề" /></a></td>
   </tr>
   <tr>
     <td>Minh họa giàu không khí, tiêu đề và giọng kể theo cảnh.</td>
@@ -178,7 +178,7 @@ Bản preview chưa được tuyên bố vượt qua toàn bộ kiểm thử tr�
 - [Báo lỗi bảo mật riêng tư](SECURITY.md)
 
 Ưu tiên tiếp theo: cài lần đầu dễ tái tạo, sửa tương thích ổ ngoài, kiểm tra thêm
-nền tảng và làm demo trực tiếp bằng FrameWeaver. Có thể đề xuất qua Issues hoặc
+nền tảng và bổ sung video hướng dẫn quy trình FrameWeaver. Có thể đề xuất qua Issues hoặc
 pull request, kèm bước tái hiện và cách đã kiểm tra.
 
 ## Giấy phép và ghi nhận
