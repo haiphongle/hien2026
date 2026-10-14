@@ -17,6 +17,8 @@ implemented by the FrameWeaver maintainer.
   regression check.
 - Declare the multipart runtime dependency required by upload routes on a fresh
   installation.
+- Declare the memory-monitor dependency used by ProPainter jobs and preserve all
+  source frames when mixing music and narration with Linux FFmpeg.
 
 ### Known limitations
 

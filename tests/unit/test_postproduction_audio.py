@@ -73,6 +73,12 @@ def test_ffmpeg_audio_mix_smoke(tmp_path, with_source_audio):
             "-of", "csv=p=0", str(output),
         ], check=True, capture_output=True, text=True, timeout=30)
         assert probe.stdout.strip() == "audio"
+        assert post_process._media_duration(str(output)) == pytest.approx(2, abs=.05)
+        frames = subprocess.run([
+            "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames",
+            "-of", "csv=p=0", str(output),
+        ], check=True, capture_output=True, text=True, timeout=30)
+        assert int(frames.stdout.strip()) == 48
 
 
 @pytest.mark.parametrize("has_audio", [False, True])

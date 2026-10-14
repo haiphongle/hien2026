@@ -218,7 +218,7 @@ def add_music(video_path: str, music_path: str, output_path: str,
     cmd = ["ffmpeg", "-y", "-i", video_path, "-stream_loop", "-1", "-i", music_path,
            "-filter_complex", filter_complex, "-map", "0:v:0", "-map", "[aout]",
            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", str(duration),
-           "-shortest", "-movflags", "+faststart", output_path]
+           "-movflags", "+faststart", output_path]
     result = run_ffmpeg(cmd, duration, processing_timeout(duration, minimum=120, multiplier=2), progress_callback)
     if result.returncode != 0:
         logger.error("Add music failed: %s", result.stderr[-200:])
@@ -279,7 +279,7 @@ def add_scene_narrations(video_path: str, narration_tracks: list[tuple], output_
     cmd.extend([
         "-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", str(duration),
-        "-shortest", "-movflags", "+faststart", output_path,
+        "-movflags", "+faststart", output_path,
     ])
     result = run_ffmpeg(cmd, duration, processing_timeout(duration, minimum=120, multiplier=2), progress_callback)
     if result.returncode != 0:
