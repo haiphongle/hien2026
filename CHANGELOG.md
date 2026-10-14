@@ -15,6 +15,8 @@ implemented by the FrameWeaver maintainer.
   file hashes, and accompanying third-party notices.
 - Align two ASR test fixtures with the source-audio probe and add a silent-source
   regression check.
+- Declare the multipart runtime dependency required by upload routes on a fresh
+  installation.
 
 ### Known limitations
 
