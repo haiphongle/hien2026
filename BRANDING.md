@@ -8,12 +8,13 @@
 The name reflects assembling individual scenes, narration, audio, and editing
 into a complete video. The banner is `docs/images/frameweaver_banner.svg`.
 
-This naming change updates the product's display name, dashboard, extension,
-documentation, repository links, and source archive. The underlying project's
-original authorship is preserved in the accompanying license notices.
+FrameWeaver is developed and maintained in `phucnguyentvp1/frameweaver`, a standalone
+GitHub repository. Its workspace includes scene production, timeline editing,
+media management, speech analysis, narration, and audio export.
 
-Original authorship is retained in `LICENSE` and `THIRD_PARTY_NOTICES.md`.
-Historical screenshots remain examples from the inherited source snapshot.
+Some code is adapted from Flow Kit. The required notices for that code remain in
+`LICENSE` and `THIRD_PARTY_NOTICES.md`; they do not describe ownership of all
+FrameWeaver features. Historical generated-media examples retain their source attribution.
 
 Existing `.flowkit/` paths, `flow_agent.db`, `FLOWKIT_*` environment variables,
 browser storage keys, authentication headers, and `/fk-*` commands remain

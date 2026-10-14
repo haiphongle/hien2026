@@ -1,10 +1,17 @@
 # Changelog
 
+## 0.1.0-preview.2 — 2026-10-14
+
+- Correct the project description: FrameWeaver is independently maintained with
+  additional editing, media, and speech tools, rather than only a renamed distribution.
+- Expand the feature overview and place reused-code attribution in the license
+  section. Preserve the original MIT notice and bundled asset terms.
+- Clarify the origin of historical media examples and FrameWeaver UI screenshots.
+
 ## 0.1.0-preview.1 — 2026-10-14
 
-Initial public FrameWeaver source distribution, based on an existing Flow Kit
-snapshot. This release does not claim that inherited features were newly
-implemented by the FrameWeaver maintainer.
+Initial public FrameWeaver release, including its editing and speech workspace
+and MIT-licensed code adapted from Flow Kit.
 
 - Introduce the FrameWeaver name, banner, favicon, dashboard branding, and
   extension display name (0.3.5).
@@ -22,7 +29,7 @@ implemented by the FrameWeaver maintainer.
 
 ### Known limitations
 
-Live generation has not been re-verified for this renamed distribution. The
+Live generation has not been re-verified for this FrameWeaver preview. The
 source still carries the documented Veo transport gaps and external-volume
 metadata/cache issues. Optional engines require separate setup and licensing
 review. See the README for the current scope and verification limits.

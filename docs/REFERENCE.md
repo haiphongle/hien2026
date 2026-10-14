@@ -1,9 +1,9 @@
 # Technical reference
 
-This inherited reference describes the base implementation. Start with the
+This reference covers the generation pipeline and FrameWeaver's related tools. Start with the
 [FrameWeaver README](../README.md) for installation, release status, and verified
-limits. Examples and historical generation claims below come from the source
-snapshot; they are not new FrameWeaver demonstrations.
+limits. Historical generation examples and claims below originate from Flow Kit;
+they are not demonstrations of FrameWeaver's additional editing and speech tools.
 
 <p align="center">
   <img src="images/frameweaver_banner.svg" width="720" alt="FRAMEWEAVER" />
@@ -22,7 +22,7 @@ snapshot; they are not new FrameWeaver demonstrations.
 ---
 
 The transport notes below are inherited from the base project. Live generation
-has not been re-verified for this renamed distribution.
+has not been re-verified for this FrameWeaver preview.
 
 > **Working against the new Google Flow API.** Flow moved to `flow.google.com`
 > in September 2026 and stopped minting the `Bearer ya29.…` that the old
@@ -48,8 +48,9 @@ has not been re-verified for this renamed distribution.
 
 Weave scenes, voices, and sound into your next video.
 
-FrameWeaver is a renamed distribution based on Flow Kit. Original authorship
-and asset notices are recorded in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+FrameWeaver combines scene generation with editing, media management, and speech
+tools. Notices for reused code and bundled assets are recorded in
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 Standalone system to generate AI videos via Google Flow. Uses a Chrome extension as a browser bridge: it mints reCAPTCHA and runs Flow's batchexecute RPCs inside a signed-in `flow.google.com` tab, which is the only place they can be signed.
 

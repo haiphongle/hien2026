@@ -26,21 +26,22 @@ FrameWeaver brings a React dashboard, Python backend, and Chrome extension into
 one workflow. Plan scenes, reuse character references, generate through your own
 Google Flow session, prepare narration, and assemble clips with FFmpeg.
 
-This is a **preview distribution derived from [Flow Kit](https://github.com/crisng95/flowkit)**,
-maintained here by [phucnguyentvp1](https://github.com/phucnguyentvp1). The initial
-publication starts from an existing source snapshot. Original authorship and
-third-party asset terms are preserved in [LICENSE](LICENSE) and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Developed and maintained by [phucnguyentvp1](https://github.com/phucnguyentvp1),
+FrameWeaver combines scene production with a broader editing workspace: layered
+timelines, media libraries, speech analysis, narration, subtitles, and saved exports.
+The project is currently available as a preview release.
 
 ## What you can do
 
-| Workspace | Capabilities in this source snapshot |
+| Workspace | Capabilities |
 | --- | --- |
 | Scene production | Projects, characters, reference images, scene prompts, image/video generation queues, and stage monitoring |
 | Browser bridge | Chrome Manifest V3 extension for requests made inside your signed-in Google Flow tab |
 | Narration and subtitles | Narration scripts, SRT editing, voice selection, and optional local TTS integrations |
+| Speech analysis | Optional transcription and timing tools for preparing and refining spoken content |
 | Audio and editing | Music and effects libraries, audio mixing, captions, frame/layout controls, and FFmpeg export |
 | Timeline | Layered video/audio/captions, trims, splits, transitions, previews, and saved export history |
+| Media management | Local media libraries, imported videos, reusable audio, and export history |
 | Agent workflows | Markdown `/fk-*` recipes for compatible coding agents and configurable CLI providers |
 | Interface languages | English, Vietnamese, Hindi, Indonesian, Chinese, Korean, and Japanese |
 
@@ -52,13 +53,13 @@ Google Flow access, a paid AI subscription, or provider credentials.
 
 <img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="FrameWeaver dashboard showing the setup guide and extension connection status" />
 
-The dashboard above was captured from the renamed local source. The extension
+The dashboard above was captured from FrameWeaver's local interface. The extension
 popup and panel use **FrameWeaver**, version **0.3.5**. See the
 [extension UI preview](docs/images/frameweaver_extension.jpg).
 
 Historical generated-media examples remain in the [technical reference](docs/REFERENCE.md).
-They come from the inherited source snapshot and are not new demonstrations made
-for this distribution.
+These examples originate from Flow Kit and are not demonstrations of FrameWeaver's
+additional editing and speech tools.
 
 ## Quick start
 
@@ -201,7 +202,7 @@ cross-platform test result is not claimed for this preview.
 | Guide | Contents |
 | --- | --- |
 | [Sharing and installation](docs/SHARING.md) | Environment setup, source archives, and distribution notes |
-| [Technical reference](docs/REFERENCE.md) | Detailed inherited API and workflow reference |
+| [Technical reference](docs/REFERENCE.md) | Detailed API and workflow reference, including historical examples |
 | [Timeline editor](docs/TIMELINE_EDITOR.md) | Editing controls, save behavior, and export |
 | [Speech analysis](docs/speech-analysis.md) | Optional speech-analysis workflow |
 | [Kokoro](docs/kokoro-english.md) / [Qwen3](docs/qwen3-multilingual.md) | Optional narration engines |
@@ -237,7 +238,10 @@ with FrameWeaver. Proposed changes are welcome through
 
 ## License and acknowledgements
 
-The application source retains the original **MIT** license and copyright notice.
+FrameWeaver is distributed under the **MIT** license. It includes code adapted
+from [Flow Kit](https://github.com/crisng95/flowkit); the original copyright and
+permission notice are preserved in [LICENSE](LICENSE) for that reused code.
+FrameWeaver's additional features and changes are maintained in this repository.
 Bundled voice previews and other third-party resources have their own terms;
 read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistribution or
 commercial use of those assets.

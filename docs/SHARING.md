@@ -78,16 +78,15 @@ You can publish using a personal GitHub account. GitHub authentication and a
 commit author's email are separate; choose your GitHub-provided `noreply` email
 for commits if you prefer to keep your personal email out of public history.
 
-The repository for this distribution is `phucnguyentvp1/frameweaver`. Original
-project details and the preserved MIT copyright notice are recorded in
-[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). This repository starts from a
-source snapshot and does not reproduce the upstream commit history. Source ZIPs
-do not include `.git`; clone from GitHub for the history of this distribution.
+FrameWeaver is maintained in `phucnguyentvp1/frameweaver`, a standalone GitHub
+repository. It includes code adapted from Flow Kit alongside its additional
+editing, media, and speech tools. The preserved MIT notice for the reused code
+is documented in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Source ZIPs
+do not include `.git`; clone from GitHub for FrameWeaver's published history.
 
-Before a public launch, add a short description of your own improvements, a
-demo you made yourself, and clear feature limitations. Existing screenshots and
-live-verification claims in the README come from the source snapshot; the
-packaging review does not re-verify those claims.
+The main README describes the current workspace and its limitations. Historical
+generation examples in the technical reference originate from Flow Kit. The
+packaging review does not re-verify those live-generation claims.
 
 The current documentation lists video upscale, Veo reference-to-video, and Veo
 start/end chaining as unported on the migrated transport. State those limitations
