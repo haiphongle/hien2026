@@ -21,6 +21,7 @@ The root license does not replace the terms attached to these bundled assets:
 | `agent/assets/voice_samples/` | Six VieNeu reference voice clips and transcripts. The local README records both the upstream Apache-2.0 repository license and a separate CC BY-NC 4.0 notice for the legacy voice presets. Keep both notices; do not describe all bundled media as MIT or assume commercial voice rights. |
 | `extension/recaptcha_enterprise.js`, `extension/recaptcha__en.js` | Bundled Google reCAPTCHA resources with their own embedded notices. Keep those notices. The root MIT license is not a license to Google services. |
 | `docs/images/` | `frameweaver_banner.svg` is the FrameWeaver banner; `frameweaver_dashboard.jpg` and `frameweaver_extension.jpg` were captured from its local UI. The historical generated-media examples in `docs/REFERENCE.md` originate from Flow Kit and are not demonstrations of FrameWeaver's added features. |
+| `docs/images/showcase/` | Five demo and workspace screenshots supplied by the FrameWeaver maintainer for the project showcase. Embedded EXIF/XMP metadata was removed without changing image pixels. These media examples are separate from the historical Flow Kit gallery; the code's MIT license does not establish rights to depicted platform branding or third-party content. |
 
 Python and JavaScript dependencies retain their respective licenses. Optional
 downloaded TTS models and ProPainter runtimes are not included in the source

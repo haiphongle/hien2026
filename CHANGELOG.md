@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add maintainer-supplied previews for illustrated moral stories, stickman videos,
+  and 2D family stories, alongside timeline and style-library screenshots.
+- Highlight the drag-and-drop editing workspace and short-form storytelling in
+  the English and Vietnamese READMEs; add a full-size showcase guide.
+- Remove embedded EXIF/XMP metadata from the five new screenshots while preserving
+  their original pixels.
+
 ## 0.1.0-preview.2 — 2026-10-14
 
 - Correct the project description: FrameWeaver is independently maintained with

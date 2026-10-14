@@ -31,16 +31,44 @@ FrameWeaver combines scene production with a broader editing workspace: layered
 timelines, media libraries, speech analysis, narration, subtitles, and saved exports.
 The project is currently available as a preview release.
 
+## Creator showcase
+
+**YouTube Shorts. Reels. Illustrated stories. Stickman explainers. 2D characters — and more.**
+
+Turn a story into scenes, add narration and subtitles, then shape the result in
+the timeline. These demo previews were shared by the FrameWeaver maintainer.
+
+<table>
+  <tr>
+    <th width="33%">Illustrated moral stories</th>
+    <th width="33%">Stickman storytelling</th>
+    <th width="33%">2D family stories</th>
+  </tr>
+  <tr>
+    <td valign="top"><a href="docs/images/showcase/karma-story-short.png"><img src="docs/images/showcase/karma-story-short.png" width="260" alt="Vertical illustrated story with a turtle scene, title, and Vietnamese subtitles" /></a></td>
+    <td valign="top"><a href="docs/images/showcase/stickman-family-short.png"><img src="docs/images/showcase/stickman-family-short.png" width="260" alt="Stickman family story with a father, mother, child, and narration captions" /></a></td>
+    <td valign="top"><a href="docs/images/showcase/illustrated-family-short.png"><img src="docs/images/showcase/illustrated-family-short.png" width="260" alt="2D family story with an illustrated mother and child, title, and subtitles" /></a></td>
+  </tr>
+  <tr>
+    <td>Atmospheric illustrations, a story title, and timed narration.</td>
+    <td>Simple characters for everyday stories and explainers.</td>
+    <td>Character-led stories with coordinated captions and audio.</td>
+  </tr>
+</table>
+
+Explore the [demo and workspace gallery](docs/SHOWCASE.md) for full-size previews.
+
 ## What you can do
 
 | Workspace | Capabilities |
 | --- | --- |
 | Scene production | Projects, characters, reference images, scene prompts, image/video generation queues, and stage monitoring |
 | Browser bridge | Chrome Manifest V3 extension for requests made inside your signed-in Google Flow tab |
+| Story styles | Illustrated style library, stickman and 2D characters, favorites, custom image references, and reusable production templates |
 | Narration and subtitles | Narration scripts, SRT editing, voice selection, and optional local TTS integrations |
 | Speech analysis | Optional transcription and timing tools for preparing and refining spoken content |
 | Audio and editing | Music and effects libraries, audio mixing, captions, frame/layout controls, and FFmpeg export |
-| Timeline | Layered video/audio/captions, trims, splits, transitions, previews, and saved export history |
+| Timeline | Drag media onto tracks, reorder and trim clips, split at the playhead, add transitions, preview, and save exports |
 | Media management | Local media libraries, imported videos, reusable audio, and export history |
 | Agent workflows | Markdown `/fk-*` recipes for compatible coding agents and configurable CLI providers |
 | Interface languages | English, Vietnamese, Hindi, Indonesian, Chinese, Korean, and Japanese |
@@ -49,17 +77,33 @@ Optional engines need their own dependencies and model downloads. AI generation
 uses your service account and applicable credits; this repository does not include
 Google Flow access, a paid AI subscription, or provider credentials.
 
-## Interface
+## Inside the workspace
 
-<img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="FrameWeaver dashboard showing the setup guide and extension connection status" />
+### Drag-and-drop timeline
 
-The dashboard above was captured from FrameWeaver's local interface. The extension
-popup and panel use **FrameWeaver**, version **0.3.5**. See the
-[extension UI preview](docs/images/frameweaver_extension.jpg).
+<a href="docs/images/showcase/timeline-editor.png"><img src="docs/images/showcase/timeline-editor.png" width="1040" alt="FrameWeaver editing workspace with a media library, vertical preview, and separate video, narration, subtitle, and music tracks" /></a>
 
-Historical generated-media examples remain in the [technical reference](docs/REFERENCE.md).
-These examples originate from Flow Kit and are not demonstrations of FrameWeaver's
-additional editing and speech tools.
+Bring video, narration, subtitles, music, and overlays together in one edit.
+Drag assets from the library onto tracks, move clips into place, split at the
+playhead, adjust the frame, and preview before exporting. The workspace includes
+audio ducking, undo/redo, autosave, and saved export history.
+
+### A visual library for your next story
+
+Choose a look before building the scenes: light or dark stickman styles, 2D
+characters, cinematic illustration, chibi, hand-drawn art, Vietnamese folk stories,
+and illustrated moral stories. Save favorites or add your own reference-based style.
+
+<details>
+  <summary><strong>Open the style library preview</strong></summary>
+  <p><a href="docs/images/showcase/style-library.png"><img src="docs/images/showcase/style-library.png" width="820" alt="FrameWeaver style library with stickman, 2D, cinematic, chibi, hand-drawn, folk story, and moral story presets" /></a></p>
+</details>
+
+<details>
+  <summary><strong>Open the dashboard and connection guide</strong></summary>
+  <p><img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="FrameWeaver dashboard showing the setup guide and extension connection status" /></p>
+  <p>The Chrome extension popup and panel use <strong>FrameWeaver 0.3.5</strong>. See the <a href="docs/images/frameweaver_extension.jpg">extension UI preview</a>.</p>
+</details>
 
 ## Quick start
 
@@ -202,6 +246,7 @@ cross-platform test result is not claimed for this preview.
 | Guide | Contents |
 | --- | --- |
 | [Sharing and installation](docs/SHARING.md) | Environment setup, source archives, and distribution notes |
+| [Demo and workspace gallery](docs/SHOWCASE.md) | Creator examples, the timeline editor, style library, and dashboard |
 | [Technical reference](docs/REFERENCE.md) | Detailed API and workflow reference, including historical examples |
 | [Timeline editor](docs/TIMELINE_EDITOR.md) | Editing controls, save behavior, and export |
 | [Speech analysis](docs/speech-analysis.md) | Optional speech-analysis workflow |
