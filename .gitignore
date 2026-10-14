@@ -1,0 +1,69 @@
+# Local credentials, generated media, and project databases
+.flowkit/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crx
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.ses
+*.har
+credentials*.json
+client_secret*.json
+token.json
+cookies*.json
+cookies*.txt
+/output/
+/releases/
+/PLAN.md
+/docs/reviews/*
+!/docs/reviews/vieneu-runtime-2026-09-28.txt
+/docs/images/flowkit_banner.svg
+/extension/_metadata/
+
+# Python environments and caches
+venv/
+.venv/
+.venvs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# JavaScript dependencies and generated builds
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+*.log
+
+# Local AI sessions and optional downloaded runtimes
+.omc/
+.claude/
+.codex/
+.gemini/
+.fk-setup.json
+/VieNeu-TTS-main/
+/kokoro-main/
+
+# Personal hosting configuration and deployment cache
+.firebase/
+.firebaserc
+/firebase.json
+
+# OS metadata (including AppleDouble files on external disks)
+.DS_Store
+._*
+__MACOSX/
+.idea/
+.vscode/

@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible problem with FrameWeaver.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "Remove credentials, cookies, signed URLs, and personal data from logs and screenshots."
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe expected behavior and the actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal example and the affected page or API route.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/filesystem, release or commit, Python, Node, Chrome, and extension version.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Relevant errors and checks
+      description: Add redacted errors and whether the backend and extension are connected.

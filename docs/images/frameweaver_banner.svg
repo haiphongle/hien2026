@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="title desc">
+  <title id="title">FrameWeaver</title>
+  <desc id="desc">Three connected film frames with a warm orange thread. Weave scenes, voices, and sound.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101018"/><stop offset="1" stop-color="#1a1723"/></linearGradient>
+    <linearGradient id="thread" x2="1"><stop stop-color="#f4b48f"/><stop offset="1" stop-color="#d07a52"/></linearGradient>
+  </defs>
+  <rect width="960" height="300" rx="24" fill="url(#bg)"/>
+  <path d="M40 247H920" stroke="#302a39"/>
+  <g fill="#181622" stroke="#6f5350" stroke-width="2">
+    <rect x="62" y="77" width="96" height="120" rx="12"/>
+    <rect x="102" y="98" width="96" height="120" rx="12"/>
+    <rect x="142" y="77" width="96" height="120" rx="12"/>
+  </g>
+  <path d="M53 171C89 113 113 215 149 157S205 105 250 153" fill="none" stroke="url(#thread)" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="53" cy="171" r="6" fill="#f4b48f"/><circle cx="250" cy="153" r="6" fill="#d07a52"/>
+  <text x="296" y="143" fill="#fff5ed" font-family="system-ui, -apple-system, sans-serif" font-size="60" font-weight="700" letter-spacing="-2">FrameWeaver</text>
+  <text x="299" y="183" fill="#c3b5c4" font-family="system-ui, -apple-system, sans-serif" font-size="20">Weave scenes, voices, and sound.</text>
+  <text x="64" y="276" fill="#b49385" font-family="system-ui, -apple-system, sans-serif" font-size="12" letter-spacing="2">LOCAL VIDEO WORKSPACE</text>
+  <text x="896" y="276" text-anchor="end" fill="#b49385" font-family="system-ui, -apple-system, sans-serif" font-size="12">phucnguyentvp1 / frameweaver</text>
+</svg>

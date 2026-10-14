@@ -1,0 +1,20 @@
+{
+  "active": "codex",
+  "roles": {
+    "video_review": {
+      "provider": "codex",
+      "model": "gpt-6-luna",
+      "effort": "max"
+    },
+    "subtitle_translation": {
+      "provider": "codex",
+      "model": "gpt-6-luna",
+      "effort": "max"
+    },
+    "prompt_suggestion": {
+      "provider": "codex",
+      "model": "gpt-6-luna",
+      "effort": "max"
+    }
+  }
+}

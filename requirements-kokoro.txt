@@ -1,0 +1,6 @@
+# Isolated environment only; keep these out of the FastAPI/VieNeu environments.
+./kokoro-main
+misaki[en]==0.9.4
+torch==2.14.1
+transformers==4.57.6
+soundfile==0.14.0
