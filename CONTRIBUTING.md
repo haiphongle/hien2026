@@ -18,6 +18,13 @@ python -m pytest tests/unit
 node --test tests/*.test.cjs tests/*.test.mjs dashboard/tests/speechRepair.test.ts
 ```
 
+Video render/export tests reserve ~512 MB of free disk space. If `/tmp` is a
+small tmpfs and you see disk-space failures, point pytest at a bigger volume:
+
+```sh
+TMPDIR=/path/with/free/space python -m pytest tests/unit
+```
+
 From `dashboard/`:
 
 ```sh
