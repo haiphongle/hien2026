@@ -16,29 +16,46 @@ giọng nói, lời đọc, phụ đề và lịch sử bản xuất. Dự án h
 
 ## Bản ứng dụng macOS beta
 
-**[Tải FrameWeaver 1.3.1 beta 1 cho Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)**
+**[Tải FrameWeaver 1.3.1 beta 2 cho Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)**
 — macOS 13 trở lên. Chọn bộ cài theo loại máy:
 
 | Máy Mac | Bộ cài | Dung lượng |
 | --- | --- | --- |
-| Apple Silicon (M1 trở lên) | [DMG arm64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-arm64.dmg) | 241 MB |
-| Intel | [DMG x64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-x64.dmg) | 253 MB |
+| Apple Silicon (M1 trở lên) | [DMG arm64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-macOS-arm64.dmg) | 247 MB |
+| Intel | [DMG x64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-macOS-x64.dmg) | 265 MB |
 
 Cả hai DMG đã ký Developer ID, được Apple notarize và gắn ticket. Mở DMG rồi kéo
 FrameWeaver vào Applications; ứng dụng có sẵn Python và FFmpeg. Model AI tùy chọn
 và tài khoản nhà cung cấp được cài/kết nối riêng.
 
-Để dùng Google Flow, tải **[ZIP extension Chrome 0.3.5 (~380 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-extension.zip)**
+Để dùng Google Flow, tải **[ZIP extension Chrome 0.3.6 (~381 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-extension.zip)**
 dùng chung cho Intel và M1. Giải nén → mở `chrome://extensions` → bật **Developer mode**
 → **Load unpacked** → chọn thư mục `extension` vừa giải nén. Hoặc lấy extension qua
 menu **Ứng dụng → Cài extension Google Flow…** trong ứng dụng.
 
-Cả hai bộ cài giữ nguyên bản ứng dụng đóng gói ngày **17/10/2026**. Tài liệu source
-tiếp tục được cập nhật độc lập; xem
-[ghi chú bản desktop](docs/releases/v1.3.1-beta.1-macos.md) và ghi chú tiếng Việt
-đính kèm release để biết đúng phạm vi, cách cài và giới hạn. Phần cài đặt bằng
-lệnh bên dưới dành cho chạy source từ repository. Bản Intel đã kiểm thử qua
-Rosetta; chưa kiểm thử trên máy Intel thật.
+Hai bộ cài đóng gói ứng dụng ngày **20/10/2026**, có **Kiểm tra kết nối Google
+Flow** và **tích hợp Muse**. Xem [hướng dẫn beta 2](docs/releases/v1.3.1-beta.2-macos.md)
+để biết cách cài và phạm vi kiểm thử. [Beta 1](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)
+vẫn được giữ nguyên. Bản Intel kiểm thử qua Rosetta, chưa thử trên máy Intel thật.
+
+### Muse AI trong cả hai bản Mac
+
+Muse có thể **lên kịch bản, tạo ảnh tham chiếu/ảnh cảnh và tạo video từ ảnh đầu**.
+Vào **Cài đặt → Muse**, kết nối [gateway muse2api](https://github.com/crisng95/muse2api)
+đã cài riêng, lưu URL/khóa gateway và kiểm tra kết nối. Sau đó chọn Muse cho từng
+công đoạn trong Studio. Ứng dụng có sẵn phần tích hợp và launcher tùy chọn;
+gateway, Chrome và tài khoản Muse cần thiết lập riêng. Tạo bằng Muse đi qua
+gateway riêng; Google Flow vẫn cần extension. Màn hình tạo dự án mới của beta
+này vẫn yêu cầu kết nối Flow sẵn sàng.
+
+Xem **[hướng dẫn Muse tiếng Việt](docs/MUSE.vi.md)**. Tên model có thể chỉ là
+alias của gateway; số token văn bản không xác nhận quyền/hạn mức tạo ảnh, video.
+Giọng đọc tiếp tục dùng các nhà cung cấp TTS hiện có.
+
+**Source và desktop:** source preview trên repository và các gói “Source code”
+tự động của GitHub tách biệt với ứng dụng desktop. Phần cài bằng lệnh bên dưới
+dành cho source preview; hướng dẫn Muse phía trên áp dụng cho **desktop beta 2**.
+Lần cập nhật tài liệu này chưa đưa code Muse của desktop vào source preview.
 
 ## Từ ý tưởng đến video của bạn
 
@@ -70,6 +87,7 @@ Xem ảnh lớn trong [bộ sưu tập demo và giao diện](docs/SHOWCASE.md).
 ## Chức năng
 
 - Quản lý dự án, nhân vật, ảnh tham chiếu, prompt và hàng chờ tạo ảnh/video.
+- Muse AI trong desktop beta 2: lên kịch bản, tạo ảnh và video từ ảnh qua gateway muse2api tùy chọn.
 - Kết nối Google Flow qua Chrome extension và phiên đăng nhập của chính bạn.
 - Chọn phong cách minh họa, người que và nhân vật 2D; lưu yêu thích, thêm ảnh mẫu và dùng lại mẫu sản xuất.
 - Soạn lời đọc, sửa SRT, chọn giọng và dùng các bộ máy TTS cục bộ tùy chọn.
@@ -105,7 +123,7 @@ phong cách từ ảnh tham chiếu của bạn.
 <details>
   <summary><strong>Mở ảnh dashboard và hướng dẫn kết nối</strong></summary>
   <p><img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="Dashboard FrameWeaver và hướng dẫn cài đặt, kết nối extension" /></p>
-  <p>Extension mang tên <strong>FrameWeaver 0.3.5</strong>. Xem thêm <a href="docs/images/frameweaver_extension.jpg">ảnh giao diện extension</a>.</p>
+  <p>Ảnh cũ minh họa <strong>FrameWeaver 0.3.5</strong>; beta 2 đi kèm extension <strong>0.3.6</strong>. Xem thêm <a href="docs/images/frameweaver_extension.jpg">ảnh giao diện extension</a>.</p>
 </details>
 
 ## Cài đặt nhanh
@@ -194,6 +212,7 @@ Bản preview chưa được tuyên bố vượt qua toàn bộ kiểm thử tr�
 
 ## Tài liệu và đóng góp
 
+- [Muse AI trong desktop beta 2](docs/MUSE.vi.md)
 - [Hướng dẫn chia sẻ và môi trường](docs/SHARING.md)
 - [Bộ sưu tập demo và giao diện](docs/SHOWCASE.md)
 - [Tài liệu kỹ thuật tham khảo](docs/REFERENCE.md)

@@ -33,29 +33,49 @@ The project is currently available as a preview release.
 
 ## macOS desktop beta
 
-**[Download FrameWeaver 1.3.1 beta 1 for Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)**
+**[Download FrameWeaver 1.3.1 beta 2 for Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)**
 — macOS 13 or later. Choose the installer for your Mac:
 
 | Mac | Installer | Size |
 | --- | --- | --- |
-| Apple Silicon (M1 or later) | [arm64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-arm64.dmg) | 241 MB |
-| Intel | [x64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-x64.dmg) | 253 MB |
+| Apple Silicon (M1 or later) | [arm64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-macOS-arm64.dmg) | 247 MB |
+| Intel | [x64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-macOS-x64.dmg) | 265 MB |
 
 Both DMGs are Developer ID signed, Apple notarized, and stapled. Open one and drag
 FrameWeaver into Applications; Python and FFmpeg are included. Optional AI models
 and provider accounts are configured separately.
 
-For Google Flow, download the **[Chrome extension ZIP (0.3.5, ~380 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-extension.zip)**,
+For Google Flow, download the **[Chrome extension ZIP (0.3.6, ~381 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-extension.zip)**,
 shared by both Mac editions. Extract it, open `chrome://extensions`, enable
 **Developer mode**, choose **Load unpacked**, and select the extracted `extension`
 folder. You can also get it from the app menu **Ứng dụng → Cài extension Google Flow…**.
 
-Both desktop installers keep the application snapshot packaged on **17 October
-2026**. Source documentation continues independently; use the
-[desktop release notes](docs/releases/v1.3.1-beta.1-macos.md) for its exact scope,
-installation steps, and limitations. The source setup instructions below are for
-running from the repository. The Intel edition was tested through Rosetta;
-testing on a physical Intel Mac is still pending.
+Both installers package the application snapshot from **20 October 2026**,
+including the **Google Flow connection check** and **Muse integration**. See the
+[beta 2 release guide](docs/releases/v1.3.1-beta.2-macos.md) for installation and
+verification details. The [older beta 1](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)
+remains available. Intel was tested through Rosetta, not on a physical Intel Mac.
+
+### Muse AI in both Mac editions
+
+Use Muse for **script planning, reference/scene images, and video from a starting
+image**. In **Settings → Muse**, connect a separately installed
+[muse2api gateway](https://github.com/crisng95/muse2api), save your gateway URL/key,
+and check the connection. Then choose Muse for the relevant stages in Studio.
+The app includes the integration and optional gateway launcher; the gateway itself,
+Chrome, and your Muse account are set up separately. Muse generation uses its own
+gateway; Google Flow generation still uses the Chrome extension. This beta's new
+project creation screen still requires a working Flow connection.
+
+See the **[Muse setup guide](docs/MUSE.md)** ([Tiếng Việt](docs/MUSE.vi.md)).
+Provider model names may be gateway aliases; a text-token balance does not confirm
+image/video entitlement or cost. Narration still uses the existing TTS providers.
+
+**Source vs desktop:** the repository's source preview and automatic GitHub
+“Source code” downloads are separate from the packaged desktop snapshot. The
+source instructions below describe that preview; Muse instructions above apply
+to the **beta 2 desktop apps**. This documentation update does not add the desktop
+Muse implementation to the source preview.
 
 ## Creator showcase
 
@@ -89,6 +109,7 @@ Explore the [demo and workspace gallery](docs/SHOWCASE.md) for full-size preview
 | Workspace | Capabilities |
 | --- | --- |
 | Scene production | Projects, characters, reference images, scene prompts, image/video generation queues, and stage monitoring |
+| Muse AI (desktop beta 2) | Script planning, reference/scene images, and image-to-video through an optional local muse2api gateway |
 | Browser bridge | Chrome Manifest V3 extension for requests made inside your signed-in Google Flow tab |
 | Story styles | Illustrated style library, stickman and 2D characters, favorites, custom image references, and reusable production templates |
 | Narration and subtitles | Narration scripts, SRT editing, voice selection, and optional local TTS integrations |
@@ -101,7 +122,7 @@ Explore the [demo and workspace gallery](docs/SHOWCASE.md) for full-size preview
 
 Optional engines need their own dependencies and model downloads. AI generation
 uses your service account and applicable credits; this repository does not include
-Google Flow access, a paid AI subscription, or provider credentials.
+Google Flow or Muse access, a paid AI subscription, or provider credentials.
 
 ## Inside the workspace
 
@@ -128,7 +149,7 @@ and illustrated moral stories. Save favorites or add your own reference-based st
 <details>
   <summary><strong>Open the dashboard and connection guide</strong></summary>
   <p><img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="FrameWeaver dashboard showing the setup guide and extension connection status" /></p>
-  <p>The Chrome extension popup and panel use <strong>FrameWeaver 0.3.5</strong>. See the <a href="docs/images/frameweaver_extension.jpg">extension UI preview</a>.</p>
+  <p>This earlier screenshot shows <strong>FrameWeaver 0.3.5</strong>; beta 2 includes extension <strong>0.3.6</strong>. See the <a href="docs/images/frameweaver_extension.jpg">extension UI preview</a>.</p>
 </details>
 
 ## Quick start
@@ -271,6 +292,7 @@ cross-platform test result is not claimed for this preview.
 
 | Guide | Contents |
 | --- | --- |
+| [Muse AI (desktop beta 2)](docs/MUSE.md) | Gateway setup, account connection, supported stages, and limitations |
 | [Sharing and installation](docs/SHARING.md) | Environment setup, source archives, and distribution notes |
 | [Demo and workspace gallery](docs/SHOWCASE.md) | Creator examples, the timeline editor, style library, and dashboard |
 | [Technical reference](docs/REFERENCE.md) | Detailed API and workflow reference, including historical examples |
