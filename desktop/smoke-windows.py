@@ -160,6 +160,8 @@ def main():
             if process and process.poll() is None: crash_and_reap(process)
             electron_log.close()
             print('Installed executable:',executable,'Test data exists:',data.exists(),flush=True)
+            if (data/'desktop-startup.log').is_file():
+                shutil.copy2(data/'desktop-startup.log',RELEASE/'desktop-startup.log')
             if (data/'logs/backend.log').is_file():
                 shutil.copy2(data/'logs/backend.log',RELEASE/'desktop-smoke.log')
             gateway_log=data/'.flowkit/muse-gateway/gateway.log'

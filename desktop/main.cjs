@@ -17,6 +17,12 @@ let window, backend, log, starting = false, quitting = false, retryState;
 
 app.setName('FrameWeaver');
 fs.mkdirSync(path.join(data, 'desktop'), { recursive: true, mode: 0o700 });
+// Isolated Windows installer tests retain early failures before Python logging exists.
+const trace = (message) => {
+  if (windows && process.env.FRAMEWEAVER_DESKTOP_TEST_DATA) fs.appendFileSync(path.join(data, 'desktop-startup.log'), `${new Date().toISOString()} ${message}\n`);
+};
+trace('Desktop main loaded');
+process.on('uncaughtExceptionMonitor', (error) => trace(error.stack || error.message));
 app.setPath('userData', path.join(data, 'desktop'));
 const primary = app.requestSingleInstanceLock();
 if (!primary) app.quit();
@@ -53,6 +59,7 @@ function internal(url) {
 }
 async function dashboard() { await window.loadURL(origin); }
 async function start() {
+  trace('Backend startup requested');
   if (starting || backend) return;
   starting = true;
   try {
@@ -134,6 +141,7 @@ function menu() {
   ]));
 }
 ipcMain.handle('startup-action', async (event, action) => {
+  trace(`Startup IPC ${action}: ${event.senderFrame?.url} expected ${pathToFileURL(startup).href}`);
   if (event.senderFrame?.url !== pathToFileURL(startup).href) return;
   if (action === 'ready') { if (retryState) status(retryState.message, retryState.retry, retryState.reuse); else start(); }
   if (action === 'retry') return start();
@@ -164,10 +172,17 @@ app.on('before-quit', async (event) => {
   app.quit();
 });
 app.whenReady().then(async () => {
+  trace('Electron ready');
   if (!primary) return;
   window = new BrowserWindow({ width: 1440, height: 940, minWidth: 1024, minHeight: 700,
     title: 'FrameWeaver', backgroundColor: '#101018',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true } });
+  if (windows && process.env.FRAMEWEAVER_DESKTOP_TEST_DATA) {
+    window.webContents.on('did-finish-load', () => trace(`Page loaded: ${window.webContents.getURL()}`));
+    window.webContents.on('preload-error', (_event, _file, error) => trace(`Preload: ${error.stack || error.message}`));
+    window.webContents.on('console-message', (_event, details, message) => trace(`Renderer: ${typeof details === 'object' ? details.message : message}`));
+    window.webContents.on('render-process-gone', (_event, details) => trace(`Renderer stopped: ${details.reason}`));
+  }
   window.webContents.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: 'deny' }; });
   window.webContents.on('will-navigate', (event, url) => {
     if (!internal(url)) { event.preventDefault(); openExternal(url); }
