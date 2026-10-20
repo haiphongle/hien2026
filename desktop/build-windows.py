@@ -113,7 +113,8 @@ def build(web):
     draw.text((128,125),'FW',font=font,anchor='mm',fill='white')
     icon.save(BUILD / 'icon.ico',sizes=[(16,16),(32,32),(48,48),(128,128),(256,256)])
     manifest = {'application':'FrameWeaver','version':LOCK['version'],'platform':'win32','arch':'x64',
-                'signed':False,'runtime_assets':[LOCK['electron'],LOCK['python'],*LOCK['fonts']],
+                'signed':False,'source_commit':os.environ.get('GITHUB_SHA'),
+                'runtime_assets':[LOCK['electron'],LOCK['python'],*LOCK['fonts']],
                 'media_sources':[{'name':n,'url':u,'sha256':s} for n,u,s in shared.media.SOURCES[1:]],
                 'wheels':{p.name:shared.digest(p) for p in sorted(wheels.glob('*.whl'))}}
     (runtime / 'BUILD-MANIFEST.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
@@ -136,6 +137,16 @@ def finalize():
             archive.write(CACHE / name,'media-sources/'+name)
         for name in ['media-windows.sh','windows-lock.json','README-WINDOWS.md']:
             archive.write(DESKTOP / name,name)
+        archive.writestr('MEDIA-SOURCE-README.txt',
+            'Rebuild the included GPL FFmpeg/x264 tools in an MSYS2 UCRT64 shell.\n'
+            'Install make, diffutils, mingw-w64-ucrt-x86_64-gcc, mingw-w64-ucrt-x86_64-pkgconf and mingw-w64-ucrt-x86_64-nasm.\n'
+            'Extract this ZIP into an empty folder, then run:\n'
+            'mkdir -p desktop/.cache/windows\n'
+            'cp media-sources/* desktop/.cache/windows/\n'
+            'cp media-windows.sh desktop/\n'
+            'bash desktop/media-windows.sh\n'
+            'Output: desktop/.cache/windows/media/bin/ffmpeg.exe and ffprobe.exe.\n')
+        archive.writestr('media-sources/SHA256SUMS', ''.join(f'{s}  {n}\n' for n,u,s in shared.media.SOURCES[1:]))
     shutil.copy2(DESKTOP / 'README-WINDOWS.md', RELEASE / 'README-WINDOWS.md')
     files=[installers[0],sources,RELEASE/'VERIFICATION-WINDOWS.json',RELEASE/'README-WINDOWS.md']
     manifest['files']={p.name:{'sha256':shared.digest(p),'bytes':p.stat().st_size} for p in files}
