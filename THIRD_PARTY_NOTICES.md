@@ -36,6 +36,8 @@ repository for upstream locations and pinned revisions.
 The Windows x64 bundle redistributes the same Electron/CPython components and
 Python package licenses under `resources/runtime`. FFmpeg 8.1 and x264 are built
 from the same pinned source revisions using MSYS2 UCRT64, with static libraries.
+zlib 1.3.2 is linked statically for PNG support; its zlib license is included as
+`runtime/media/LICENSE.zlib` and its corresponding source accompanies the build recipe.
 Their GPL notices, source archives and Windows build recipe accompany the
 installer as `*-Windows-x64-media-sources.zip`. MSYS2/compiler tools and NSIS are
 build dependencies; they are not installed as a development environment for users.

@@ -5,6 +5,11 @@
     "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-win32-x64.zip",
     "sha256": "1c9319bab793492715f7668e0be0e6a30bf2a8577275e40035bd33601bf6f573"
   },
+  "zlib": {
+    "name": "zlib-1.3.2.tar.gz",
+    "url": "https://zlib.net/zlib-1.3.2.tar.gz",
+    "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
+  },
   "python": {
     "name": "cpython-3.12.15+20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
     "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.12.15%2B20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",

@@ -22,6 +22,7 @@ spec = importlib.util.spec_from_file_location('macos_distribution', DESKTOP / 'b
 shared = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(shared)
 LOCK = {**shared.LOCK, **json.loads((DESKTOP / 'windows-lock.json').read_text())}
+MEDIA_SOURCES = [*shared.media.SOURCES[1:], tuple(LOCK['zlib'][key] for key in ('name', 'url', 'sha256'))]
 shared.media.CACHE = CACHE
 
 
@@ -34,8 +35,8 @@ def prepare():
     CACHE.mkdir(parents=True, exist_ok=True)
     for item in [LOCK['electron'], LOCK['python'], *LOCK['fonts']]:
         shared.media.download(**item)
-    # Build exactly the same FFmpeg/x264 sources as the Mac release.
-    for name, url, sha in shared.media.SOURCES[1:]:
+    # Same FFmpeg/x264 sources as Mac, plus static zlib for PNG decoding.
+    for name, url, sha in MEDIA_SOURCES:
         shared.media.download(name, url, sha)
 
 
@@ -115,7 +116,7 @@ def build(web):
     manifest = {'application':'FrameWeaver','version':LOCK['version'],'platform':'win32','arch':'x64',
                 'signed':False,'source_commit':os.environ.get('GITHUB_SHA'),
                 'runtime_assets':[LOCK['electron'],LOCK['python'],*LOCK['fonts']],
-                'media_sources':[{'name':n,'url':u,'sha256':s} for n,u,s in shared.media.SOURCES[1:]],
+                'media_sources':[{'name':n,'url':u,'sha256':s} for n,u,s in MEDIA_SOURCES],
                 'wheels':{p.name:shared.digest(p) for p in sorted(wheels.glob('*.whl'))}}
     (runtime / 'BUILD-MANIFEST.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
     print('Build complete; run smoke-windows.py before packaging the installer.', flush=True)
@@ -133,12 +134,12 @@ def finalize():
         raise RuntimeError('Unexpected signing state; inspect before publishing.')
     sources = RELEASE / f'FrameWeaver-{LOCK["version"]}-Windows-x64-media-sources.zip'
     with zipfile.ZipFile(sources,'w',compression=zipfile.ZIP_DEFLATED) as archive:
-        for name,url,sha in shared.media.SOURCES[1:]:
+        for name,url,sha in MEDIA_SOURCES:
             archive.write(CACHE / name,'media-sources/'+name)
         for name in ['media-windows.sh','windows-lock.json','README-WINDOWS.md']:
             archive.write(DESKTOP / name,name)
         archive.writestr('MEDIA-SOURCE-README.txt',
-            'Rebuild the included GPL FFmpeg/x264 tools in an MSYS2 UCRT64 shell.\n'
+            'Rebuild the included GPL FFmpeg/x264 tools with static zlib in an MSYS2 UCRT64 shell.\n'
             'Install make, diffutils, mingw-w64-ucrt-x86_64-gcc, mingw-w64-ucrt-x86_64-pkgconf and mingw-w64-ucrt-x86_64-nasm.\n'
             'Extract this ZIP into an empty folder, then run:\n'
             'mkdir -p desktop/.cache/windows\n'
@@ -146,7 +147,7 @@ def finalize():
             'cp media-windows.sh desktop/\n'
             'bash desktop/media-windows.sh\n'
             'Output: desktop/.cache/windows/media/bin/ffmpeg.exe and ffprobe.exe.\n')
-        archive.writestr('media-sources/SHA256SUMS', ''.join(f'{s}  {n}\n' for n,u,s in shared.media.SOURCES[1:]))
+        archive.writestr('media-sources/SHA256SUMS', ''.join(f'{s}  {n}\n' for n,u,s in MEDIA_SOURCES))
     shutil.copy2(DESKTOP / 'README-WINDOWS.md', RELEASE / 'README-WINDOWS.md')
     files=[installers[0],sources,RELEASE/'VERIFICATION-WINDOWS.json',RELEASE/'README-WINDOWS.md']
     manifest['files']={p.name:{'sha256':shared.digest(p),'bytes':p.stat().st_size} for p in files}

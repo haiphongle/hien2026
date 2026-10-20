@@ -1,7 +1,7 @@
 # FrameWeaver · Windows x64 preview
 
 Windows 10/11 x64. The installer includes Electron, CPython 3.12, FFmpeg/ffprobe
-with static x264, and bundled Vietnamese/CJK fonts. Large inference models and
+with static x264/zlib, and bundled Vietnamese/CJK fonts. Large inference models and
 provider accounts are separate. This first Windows package is **unsigned**;
 no Authenticode publisher identity or SmartScreen reputation is claimed.
 
