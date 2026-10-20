@@ -143,7 +143,7 @@ function menu() {
 ipcMain.handle('startup-action', async (event, action) => {
   trace(`Startup IPC ${action}: ${event.senderFrame?.url} expected ${pathToFileURL(startup).href}`);
   if (event.senderFrame?.url !== pathToFileURL(startup).href) return;
-  if (action === 'ready') { if (retryState) status(retryState.message, retryState.retry, retryState.reuse); else start(); }
+  if (action === 'ready' && retryState) status(retryState.message, retryState.retry, retryState.reuse);
   if (action === 'retry') return start();
   if (action === 'reuse' && await health()) return dashboard();
   if (action === 'logs') return shell.openPath(path.join(data, 'logs'));
@@ -191,5 +191,6 @@ app.whenReady().then(async () => {
   window.on('close', (event) => { if (!quitting) { event.preventDefault(); if (windows) app.quit(); else window.hide(); } });
   menu();
   await window.loadFile(startup);
+  await start();
 });
 app.on('activate', () => window?.show());
