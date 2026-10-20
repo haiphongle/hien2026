@@ -16,6 +16,7 @@ const startup = path.join(__dirname, 'startup.html');
 let window, backend, log, starting = false, quitting = false, retryState;
 
 app.setName('FrameWeaver');
+fs.mkdirSync(path.join(data, 'desktop'), { recursive: true, mode: 0o700 });
 app.setPath('userData', path.join(data, 'desktop'));
 const primary = app.requestSingleInstanceLock();
 if (!primary) app.quit();
