@@ -136,6 +136,7 @@ class ProPainterClipsRequest(EditModel):
     region: EditRegion
     dilation: int = Field(default=4, ge=1, le=8)
     max_side: Literal[192, 320] = 320
+    processing_mode: Literal['standard', 'fixed_logo_fast'] = 'standard'
 
 
 class EditingPreviewRequest(EditModel):

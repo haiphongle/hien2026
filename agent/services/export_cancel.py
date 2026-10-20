@@ -1,10 +1,9 @@
 """Cooperative cancellation shared across async workers and FFmpeg threads."""
 import asyncio
-import os
-import signal
 import threading
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from agent.services.process_control import kill_tree
 
 
 class ExportCancelled(Exception):
@@ -33,10 +32,7 @@ class CancellationToken:
 
     @staticmethod
     def _kill(pid):
-        try:
-            os.killpg(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        kill_tree(pid)
 
     def cancel(self):
         self.event.set()

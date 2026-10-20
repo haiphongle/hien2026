@@ -251,7 +251,7 @@ async def get_assembled_file(vid: str):
     return FileResponse(
         path,
         media_type="video/mp4",
-        filename=f"{vid}.mp4",
+        filename=f"frameweaver-{vid}.mp4",
         content_disposition_type="inline",
         headers={"Cache-Control": "no-cache, must-revalidate"},
     )

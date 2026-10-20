@@ -10,7 +10,7 @@ from agent.services import media_jobs as jobs
 from agent.services.speech_store import atomic_json, read_json, load_document, timeline_key
 from agent.services import ai_tasks
 from agent.services import imported_video
-from agent.services.cli_providers import executable, resolve_role
+from agent.services.cli_providers import executable, resolve_role, available
 
 _semaphore = asyncio.Semaphore(1)
 BATCH_SIZE = 20
@@ -25,10 +25,10 @@ class TranslationFormatError(ValueError):
 def providers():
     role = resolve_role("subtitle_translation")
     label = f"Theo Cài đặt · {role['provider']} · {role['model'] or 'model mặc định'}"
-    choices = [{"id": "configured", "name": label, "available": bool(executable(role["provider"]))}]
+    choices = [{"id": "configured", "name": label, "available": available(role["provider"])}]
     choices.extend({"id": name, "name": label + " · dùng model trong Cài đặt nếu cùng AI",
-                    "available": bool(executable(name))}
-                   for name, label in [("codex", "Codex"), ("claude", "Claude Code"), ("agy", "Antigravity")])
+                    "available": available(name)}
+                   for name, label in [("codex", "Codex"), ("claude", "Claude Code"), ("agy", "Antigravity"), ("muse2api", "Muse")])
     return choices
 
 
@@ -85,7 +85,7 @@ async def translate_batch(provider, prompt, *, cue_ids=None):
         schema["properties"]["cues"].update(minItems=len(cue_ids), maxItems=len(cue_ids))
         schema["properties"]["cues"]["items"]["properties"]["id"]["enum"] = cue_ids
     binary = executable(role["provider"])
-    if not binary:
+    if not available(role["provider"]):
         raise ValueError("CLI dịch chưa có trên máy. Chọn AI trong Cài đặt.")
     return await ai_tasks.complete(role, prompt, schema=schema, binary=binary)
 
@@ -105,7 +105,7 @@ def checkpoint(vid, kind="translation"):
             return None
         if not isinstance(value.get("rows"), list) or not isinstance(value.get("assignment"), dict):
             return None
-        if value.get("provider_selector") not in {"configured", "codex", "claude", "agy"}:
+        if value.get("provider_selector") not in {"configured", "codex", "claude", "agy", "muse2api"}:
             return None
         if not all(isinstance(value.get(k), str) for k in ("signature", "language", "synopsis", "glossary")):
             return None
@@ -148,7 +148,7 @@ def runner(vid, doc: SpeechDocument, provider, language, synopsis, glossary, *, 
     if selection is not None and (not cues or set(selection) != {str(c.id) for c in cues}):
         raise ValueError("Chọn ít nhất một câu có trong kịch bản để rút gọn.")
     role = assignment(provider)
-    if not executable(role["provider"]):
+    if not available(role["provider"]):
         raise ValueError("CLI AI chưa có trên máy. Chọn nhà cung cấp đang sẵn sàng.")
     if not doc.cues:
         raise ValueError(f"Lưu phụ đề trước khi {verb}.")

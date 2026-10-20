@@ -2,6 +2,8 @@
 import asyncio
 import hashlib
 import logging
+import threading
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -16,6 +18,7 @@ router = APIRouter(tags=["tts"])
 logger = logging.getLogger(__name__)
 _tasks: dict[str, asyncio.Task] = {}
 _jobs: dict[str, dict] = {}
+_cancels: dict[str, threading.Event] = {}
 Engine = Literal["vieneu", "kokoro", "qwen3"]
 
 
@@ -59,7 +62,29 @@ async def preview_job(engine: Engine = "vieneu", language: str | None = None):
     if engine == "qwen3" and language is not None and language not in speech_voices.engine_service(engine).LANGUAGES:
         raise HTTPException(422, "Ngôn ngữ Qwen3 không được hỗ trợ.")
     key = f"{engine}:{language or 'en'}" if engine == "qwen3" else engine
-    return _jobs.get(key, {"status": "IDLE", "completed": 0, "total": 0, "stage": "idle", "errors": [], "current_voice": None})
+    job = _jobs.get(key, {"status": "IDLE", "completed": 0, "total": 0, "stage": "idle", "errors": [], "current_voice": None})
+    return {**job, 'elapsed_seconds': round(max(0, job.get('finished_at', time.time()) - job.get('created_at', time.time())))}
+
+
+@router.post('/tts/{engine}/previews/cancel')
+async def cancel_previews(engine: Engine = 'vieneu', language: str | None = None):
+    await preview_job(engine, language)  # Validate language before looking up a task.
+    key = f"{engine}:{language or 'en'}" if engine == 'qwen3' else engine
+    task, event = _tasks.get(key), _cancels.get(key)
+    if task and not task.done() and event:
+        job = _jobs[key]
+        queued = job['status'] == 'QUEUED'
+        event.set()
+        job.update(status='CANCELLING', stage='cancelling')
+        # Queued jobs own no worker. Running threads retain the semaphore until
+        # their worker/check finishes cancellation; never interrupt another job.
+        if queued:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            job.update(status='CANCELLED', stage='cancelled', current_voice=None, finished_at=time.time())
+            if _cancels.get(key) is event:
+                _cancels.pop(key, None)
+    return await preview_job(engine, language)
 
 
 @router.post("/tts/{engine}/previews", status_code=202)
@@ -89,22 +114,28 @@ async def prepare_previews(engine: Engine = "vieneu", language: str | None = Non
         return _jobs[key]
     completed = sum(bool(voice["audio_url"]) for voice in library)
     _job = _jobs[key] = {"status": "QUEUED", "completed": completed, "processed": completed, "total": len(library),
-            "stage": "queued", "errors": [], "current_voice": None}
+            "stage": "queued", "errors": [], "current_voice": None, 'created_at': time.time()}
+    cancelled = _cancels[key] = threading.Event()
 
     async def run():
         try:
             loop = asyncio.get_running_loop()
             def apply_progress(event):
-                _job["stage"] = event.get("stage", "generating")
+                if not cancelled.is_set() and _job['status'] in {'QUEUED', 'PROCESSING'}:
+                    _job["stage"] = event.get("stage", "generating")
             def progress(event):
                 loop.call_soon_threadsafe(apply_progress, event)
             for voice in library:
+                if cancelled.is_set():
+                    break
                 if voice["audio_url"]:
                     continue
                 _job["current_voice"] = voice["name"]
-                _job["stage"] = "queued"
+                _job.update(status='QUEUED', stage='queued')
                 # Release between voices so narration requests can use the same model.
                 async with TTS_SEMAPHORE:
+                    if cancelled.is_set():
+                        break
                     _job["status"] = "PROCESSING"
                     preset_id = voice["id"]
                     sample = service.sample_text(preset_id) if engine == "qwen3" else service.SAMPLE_TEXT
@@ -112,30 +143,42 @@ async def prepare_previews(engine: Engine = "vieneu", language: str | None = Non
                         result = await asyncio.to_thread(speech_voices.generate, {
                             "voice": service.get_preset(preset_id)["voice"],
                             "identity": service.voice_identity(preset_id), "speed": 1.0,
+                            'cancel_event': cancelled,
+                            **({'load_timeout': 180} if engine == 'qwen3' and ready.get('model_downloaded') else {}),
                             "items": [{"id": preset_id, "text": sample,
+                                       'preview': True,
                                        "output": str(service.preview_path(preset_id)),
                                        "text_hash": hashlib.sha256(sample.encode()).hexdigest()}],
                         }, progress)
                     except (TimeoutError, RuntimeError, OSError, ValueError) as exc:
+                        if cancelled.is_set():
+                            break
                         _job["errors"].append(f"{voice['name']}: {exc}")
                         _job["processed"] += 1
                         continue
                 _job["processed"] += 1
+                if cancelled.is_set():
+                    break
                 if result[0]["ok"]:
                     _job["completed"] += 1
                 else:
                     _job["errors"].append(f"{voice['name']}: {result[0]['error']}")
-            _job["status"] = "COMPLETED_WITH_ERRORS" if _job["errors"] else "COMPLETED"
-            _job["stage"] = "done"
-            _job["current_voice"] = None
+            _job["status"] = 'CANCELLED' if cancelled.is_set() else "COMPLETED_WITH_ERRORS" if _job["errors"] else "COMPLETED"
+            _job["stage"] = 'cancelled' if cancelled.is_set() else "done"
         except asyncio.CancelledError:
-            _job["status"] = "FAILED"
-            _job["errors"].append("Máy chủ đã dừng. Bấm chuẩn bị lại để tiếp tục các mẫu còn thiếu.")
+            _job["status"] = 'CANCELLED' if cancelled.is_set() else "FAILED"
+            _job['stage'] = 'cancelled' if cancelled.is_set() else 'interrupted'
+            if not cancelled.is_set():
+                _job["errors"].append("Máy chủ đã dừng. Bấm chuẩn bị lại để tiếp tục các mẫu còn thiếu.")
             raise
         except Exception as exc:
             logger.exception("%s preview preparation failed", engine)
             _job["status"] = "FAILED"
             _job["errors"].append(str(exc))
+        finally:
+            _job.update(finished_at=time.time(), current_voice=None)
+            if _cancels.get(key) is cancelled:
+                _cancels.pop(key, None)
 
     _tasks[key] = asyncio.create_task(run())
     return _job

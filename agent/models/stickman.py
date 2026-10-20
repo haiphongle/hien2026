@@ -4,12 +4,13 @@ from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 from agent.materials import STORY_PRESETS
-from agent.models.timeline import TimelineModel
+from agent.models.timeline import TimelineModel, ImageEffect
 from agent.models.video_model import VideoModel
+from agent.models.story_background import BackgroundSnapshot
 
 _STYLES = {p['id']: p for p in STORY_PRESETS}
 MAX_STORY_SCENES = 200
-Motion = Literal['zoom', 'pan', 'still', 'ai', 'talk']
+Motion = Literal['zoom', 'pan', 'still', 'effects', 'mixed', 'ai', 'talk']
 Emotion = Literal['happy', 'sad', 'thinking', 'surprised']
 Gesture = Literal['rest', 'explain', 'wave', 'point', 'think']
 CharacterRole = Literal['A', 'B', 'C', 'D', 'E', 'F']
@@ -55,6 +56,8 @@ class SceneAction(TimelineModel):
 
 class StoryScene(SceneAction):
     narration: str = Field(min_length=3, max_length=450)
+    image_effect: ImageEffect | None = None
+    render_mode: Literal['inherit', 'effects', 'ai'] = 'inherit'
     cue_start: int | None = Field(default=None, ge=1, le=200)
     cue_end: int | None = Field(default=None, ge=1, le=200)
 
@@ -156,6 +159,8 @@ class Storyboard(StoryCharacters):
 
 
 class PlanRequest(StoryCharacters):
+    background: BackgroundSnapshot | None = None
+    text_provider: Literal['configured', 'codex', 'claude', 'agy', 'muse2api'] = 'configured'
     source: str = Field(min_length=3, max_length=12000)
     scene_count: int | None = Field(default=None, ge=1, le=MAX_STORY_SCENES)
     language: Literal['vi', 'en'] = 'vi'
@@ -181,7 +186,8 @@ class PlanRequest(StoryCharacters):
         return value.strip() if isinstance(value, str) else value
 
 
-class CreateRequest(Storyboard):
+class ProductionSettings(StoryCharacters):
+    background: BackgroundSnapshot | None = None
     style: str = 'stickman_chalk'
     orientation: Literal['VERTICAL', 'HORIZONTAL'] = 'VERTICAL'
     language: Literal['vi', 'en'] = 'vi'
@@ -192,11 +198,15 @@ class CreateRequest(Storyboard):
     music_filename: str | None = Field(default=None, max_length=120)
     music_gain: float = Field(default=.25, ge=0, le=1)
     motion: Motion = 'zoom'
+    image_effect: ImageEffect = Field(default_factory=ImageEffect)
+    keep_completed_clips: bool = True
     dialogue: bool = False
     second_preset_id: str | None = Field(default=None, min_length=3, max_length=100)
     second_character_id: UUID | None = None
     speech_check: bool = False
     video_model: VideoModel | None = None
+    image_provider: Literal['flow', 'muse2api'] = 'flow'
+    video_provider: Literal['flow', 'muse2api'] = 'flow'
     style_profile_id: UUID | None = None
     preview_first: bool = False
     preview_all: bool = False
@@ -211,8 +221,11 @@ class CreateRequest(Storyboard):
 
     @model_validator(mode='after')
     def voice_language(self):
+        scenes = getattr(self, 'scenes', [])
+        if self.motion == 'talk' and self.background:
+            raise ValueError('Bối cảnh câu chuyện dùng với ảnh hoặc clip AI; mẫu vector chưa hỗ trợ bối cảnh này.')
         if self.motion == 'talk' and (any(c.role not in {'A', 'B'} for c in self.characters)
-                or any(s.extras or s.assets or s.cast == [] for s in self.scenes)):
+                or any(s.extras or s.assets or s.cast == [] for s in scenes)):
             raise ValueError('Câu chuyện nhiều nhân vật / bối cảnh cần ảnh hoặc Hoạt hình AI; mẫu vector chỉ hỗ trợ A/B.')
         if self.motion == 'talk' and not _STYLES[self.style].get('local_actor', True):
             raise ValueError('Phong cách này cần ảnh hoặc Hoạt hình AI · Google Flow; không dùng nhân vật vector thử nghiệm.')
@@ -220,11 +233,15 @@ class CreateRequest(Storyboard):
             raise ValueError('Khóa phong cách dùng với ảnh hoặc Hoạt hình AI; mẫu vector chỉ dùng tạo hình có sẵn.')
         if self.engine == 'vieneu' and self.language != 'vi' or self.engine in {'kokoro', 'qwen3'} and self.language != 'en':
             raise ValueError('Chọn bộ giọng phù hợp với ngôn ngữ lời đọc.')
-        if any(s.speaker == 'B' for s in self.scenes) and (not self.dialogue or not self.second_preset_id):
+        if any(s.speaker == 'B' for s in scenes) and (not self.dialogue or not self.second_preset_id):
             raise ValueError('Chọn giọng B trước khi tạo cảnh nhân vật B nói.')
         if self.dialogue and not self.second_preset_id:
             raise ValueError('Chọn giọng cho cả hai nhân vật.')
         return self
+
+
+class CreateRequest(ProductionSettings, Storyboard):
+    pass
 
 
 class SceneSuggestionRequest(PlanRequest):
@@ -234,15 +251,17 @@ class SceneSuggestionRequest(PlanRequest):
 class PromptPreviewRequest(PlanRequest):
     scenes: list[StoryScene] = Field(min_length=1, max_length=MAX_STORY_SCENES)
     motion: Motion = 'ai'
+    image_provider: Literal['flow', 'muse2api'] = 'flow'
 
 
 class ProductionTemplate(TimelineModel):
     name: str = Field(min_length=3, max_length=80)
-    settings: CreateRequest
+    settings: CreateRequest | ProductionSettings
 
 
 class RetryRequest(TimelineModel):
     video_model: VideoModel | None = None
+    media_provider: Literal['muse2api'] | None = None
     auto_switch: bool = True
     job_id: UUID | None = None
     approve_preview: bool = False
@@ -252,6 +271,8 @@ class RetryRequest(TimelineModel):
 
     @model_validator(mode='after')
     def preview_action(self):
+        if self.media_provider and (self.video_model or self.approve_preview or self.regenerate_preview):
+            raise ValueError('Đổi nhà cung cấp hoặc duyệt/tạo lại ảnh, mỗi lần một thao tác.')
         if self.preview_scene_id and not self.regenerate_preview:
             raise ValueError('Chọn cảnh cần tạo lại ảnh, rồi duyệt toàn bộ ảnh để tiếp tục.')
         if self.regenerate_preview and (self.approve_preview or self.preview_media_id):

@@ -3,9 +3,10 @@ import json
 import os
 import tempfile
 from pathlib import Path
+from agent.paths import DATA_DIR, config_file
 
 # ─── Paths ───────────────────────────────────────────────────
-BASE_DIR = Path(os.environ.get("FLOW_AGENT_DIR", Path(__file__).parent.parent))
+BASE_DIR = DATA_DIR
 DB_PATH = BASE_DIR / "flow_agent.db"
 
 # ─── API Server ──────────────────────────────────────────────
@@ -48,7 +49,7 @@ MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", "5"))  #
 STALE_PROCESSING_TIMEOUT = int(os.environ.get("STALE_PROCESSING_TIMEOUT", "600"))  # 10 min
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
-_MODELS_FILE = Path(__file__).parent / "models.json"
+_MODELS_FILE = config_file("models.json", seed=True)
 with open(_MODELS_FILE) as _f:
     _MODELS = json.load(_f)
 
@@ -61,7 +62,7 @@ IMAGE_MODELS = _MODELS["image_models"]
 DEFAULT_IMAGE_MODEL = _MODELS.get("default_image_model", "NANO_BANANA_PRO")
 
 # ─── Output Directories ─────────────────────────────────────
-OUTPUT_DIR = BASE_DIR / "output"
+OUTPUT_DIR = Path(os.environ.get("FRAMEWEAVER_OUTPUT_DIR", BASE_DIR / "output")).expanduser()
 SHARED_OUTPUT_DIR = OUTPUT_DIR / "_shared"
 TTS_TEMPLATES_DIR = SHARED_OUTPUT_DIR / "tts_templates"
 MUSIC_OUTPUT_DIR = SHARED_OUTPUT_DIR / "music"
@@ -104,7 +105,7 @@ REVIEW_SHEET_COLS = int(os.environ.get("REVIEW_SHEET_COLS", "3"))
 REVIEW_SHEET_ROWS = int(os.environ.get("REVIEW_SHEET_ROWS", "3"))
 
 # ─── CLI Providers (video review vision analysis) ────────────
-_PROVIDERS_FILE = Path(__file__).parent / "providers.json"
+_PROVIDERS_FILE = config_file("providers.json", seed=True)
 with open(_PROVIDERS_FILE) as _pvf:
     CLI_PROVIDERS = json.load(_pvf)  # mutable dict, hot-reloaded like VIDEO_MODELS
 REVIEW_CLI_TIMEOUT_S = float(os.environ.get("REVIEW_CLI_TIMEOUT_S", "120"))

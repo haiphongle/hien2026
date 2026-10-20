@@ -3,16 +3,16 @@ import json
 import logging
 import os
 import tempfile
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
 from agent.db import crud
+from agent.paths import config_file
 
 router = APIRouter(prefix="/api/active-project", tags=["active-project"])
 logger = logging.getLogger(__name__)
 
-_STATE_FILE = Path(__file__).parent.parent / "active_project.json"
+_STATE_FILE = config_file("active_project.json")
 
 
 def _read_state() -> dict | None:

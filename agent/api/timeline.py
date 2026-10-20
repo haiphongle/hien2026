@@ -115,7 +115,7 @@ async def state(vid: UUID):
                 assets.append({**timeline.public_asset(key, data), 'missing': missing})
                 known.add(data['id'])
     return {**saved, 'assets': assets, 'warnings': warnings, 'source_available': source is not None,
-            'fonts': editing.fonts(), 'legacy_available': await timeline_bridge.has_legacy(key),
+            'image_effects': timeline.image_effects.catalog(), 'fonts': editing.fonts(), 'legacy_available': await timeline_bridge.has_legacy(key),
             'exports': [e for e in editing.load(key)['exports'] if e.get('operation') == 'timeline']}
 
 
@@ -142,7 +142,43 @@ async def checked_asset(vid, aid):
 @router.get('/{vid}/timeline/assets/{aid}/file')
 async def asset_file(vid: UUID, aid: UUID):
     data = await checked_asset(vid, aid)
-    return FileResponse(data['path'], media_type='video/mp4' if data['kind'] == 'video' else None)
+    return FileResponse(data['path'], media_type=data.get('mime') or ('video/mp4' if data['kind'] == 'video' else None))
+
+
+@router.post('/{vid}/timeline/assets/{aid}/image-source', dependencies=[Depends(media_library.guard)])
+async def image_source(vid: UUID, aid: UUID):
+    """Opt-in conversion preserves all edits on timelines made before editable images."""
+    from agent.services import stickman
+    data = await checked_asset(vid, aid)
+    metadata = read_json(Path(data['path']).with_suffix('.metadata.json'), {})
+    if not timeline.public_asset(str(vid), data)['image_editable'] or data['owner'] != str(vid):
+        raise HTTPException(422, 'Đoạn này không phải ảnh hiệu ứng đã dựng trong Studio.')
+    try:
+        sid = str(UUID(data['ref'].split(':')[1]))
+        row = await crud.get_scene(sid)
+        if not row or row['video_id'] != str(vid):
+            raise ValueError('Không tìm thấy cảnh gốc.')
+        media_id = metadata.get('image_media_id')
+        if not media_id:
+            # Old metadata lacks an immutable image ID. Only recover the current
+            # variant; never silently substitute a later regenerated image.
+            current = read_json(stickman.directory(str(vid))/'renders.json', {}).get(sid, {})
+            if current.get('path') != data['path']:
+                raise ValueError('Bản ảnh cũ chưa lưu ID gốc. Hãy dùng bản cảnh mới nhất.')
+            plan = read_json(stickman.directory(str(vid))/'plan.json', {})
+            prefix = 'vertical' if plan.get('orientation') == 'VERTICAL' else 'horizontal'
+            media_id = row.get(f'{prefix}_image_media_id')
+            if stickman.digest([metadata['settings'], media_id, pacing.fingerprint(Path(metadata['audio']))]) != metadata['key']:
+                raise ValueError('Ảnh cảnh đã được tạo lại. Không tự thay ảnh khác vào bản dựng cũ.')
+        path = stickman.directory(str(vid))/f'{UUID(media_id)}.image'
+        if not path.is_file():
+            raise ValueError('Ảnh gốc chưa có trên máy. Nạp lại ảnh cảnh trong Studio trước.')
+        effect = dict(metadata['settings']['image_effect'])
+        effect['movement'] = metadata['settings']['movement']
+        original = await timeline.register(str(vid), str(vid), f'stickman:{sid}:{path.stem}', data['name'], path, 'source')
+        return {'asset': original, 'image_effect': effect, 'image_span': data['duration']}
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get('/{vid}/timeline/assets/{aid}/visuals')

@@ -11,10 +11,12 @@ from pathlib import Path
 import shutil
 import tempfile
 import uuid
+from PIL import Image
 
 from agent.config import SHARED_OUTPUT_DIR
 from agent.models.timeline import TimelineDocument
-from agent.services import editing, media_jobs, pacing, timeline_layers as layers, timeline_overlay, timeline_transitions
+from agent.services import editing, image_effects, media_jobs, pacing, timeline_layers as layers, timeline_overlay, timeline_transitions
+from agent.media_limits import MAX_DURATION
 from agent.models.editing import EditingSettings, FrameSettings
 from agent.services.speech_store import atomic_json, identifier, read_json
 
@@ -58,6 +60,8 @@ def public_asset(vid, data):
     return {k: v for k, v in data.items() if k not in {'path'}} | {
         'url': f"/api/videos/{vid}/timeline/assets/{data['id']}/file",
         'visuals_ready': (directory(vid) / 'visuals' / data['id'] / 'summary.json').is_file(),
+        'image_editable': not data.get('is_image') and data.get('ref', '').startswith('stickman:') and
+                          read_json(Path(data['path']).with_suffix('.metadata.json'), {}).get('settings', {}).get('motion') == 'effects',
         'proxy_url': f"/api/videos/{vid}/timeline/assets/{data['id']}/proxy" if (directory(vid) / 'proxies' / f"{data['id']}.mp4").is_file() else None,
     }
 
@@ -73,8 +77,15 @@ async def register(vid, owner, ref, name, path, category):
             cached['name'] = name[:120]
             atomic_json(asset_file(vid, aid), cached)
         return public_asset(vid, cached)
-    async with _probe_slots:
-        info = await pacing.probe(path)
+    # Still images share the picture track, but have no finite source playback time.
+    is_image = path.suffix.lower() in {'.image', '.png', '.jpg', '.jpeg', '.webp'}
+    if is_image:
+        with Image.open(path) as image:
+            info = dict(width=image.width, height=image.height, duration=MAX_DURATION, fps=30,
+                        has_audio=False, is_image=True, mime=Image.MIME.get(image.format, 'image/png'))
+    else:
+        async with _probe_slots:
+            info = await pacing.probe(path)
     if category in {'source', 'export'} and not info['width']:
         raise ValueError(f'Tư liệu video không có hình ảnh: {name}.')
     if category in {'sfx', 'music'} and not info['has_audio']:
@@ -132,7 +143,11 @@ def validate_assets(vid, document):
                 editing.font_path(clip.caption.font_id)
             continue
         data = assets[str(clip.asset_id)]
-        if clip.source_in + clip.duration * clip.speed > data['duration'] + .001:
+        if clip.image_effect and not data.get('is_image'):
+            raise ValueError('Chọn ảnh gốc để dùng hiệu ứng ảnh; clip AI giữ chuyển động riêng.')
+        if data.get('is_image') and tracks[clip.track_id].kind != 'video':
+            raise ValueError('Ảnh cảnh chỉ dùng trên lớp hình ảnh chính.')
+        if not data.get('is_image') and clip.source_in + clip.duration * clip.speed > data['duration'] + .001:
             raise ValueError(f"Đoạn cắt vượt thời lượng tư liệu: {data['name']}.")
         if tracks[clip.track_id].kind in {'video', 'overlay'} and data['kind'] != 'video':
             raise ValueError('Không thể đặt file âm thanh vào lớp hình ảnh.')
@@ -185,11 +200,14 @@ async def visualize(vid, aid, update):
             result.update(await asyncio.to_thread(summarize_pcm, pcm, data['duration']))
         if data['kind'] == 'video':
             update(stage='Tạo dải ảnh thật từ video', progress=78)
-            count = min(60, max(1, math.ceil(data['duration'] / 4)))
+            count = 1 if data.get('is_image') else min(60, max(1, math.ceil(data['duration'] / 4)))
             interval = data['duration'] / count
             sprite = work / 'sprite.jpg'
             thumbnail_filter = 'scale=120:68:force_original_aspect_ratio=decrease,pad=120:68:(ow-iw)/2:(oh-ih)/2'
-            if data['duration'] > 600:
+            if data.get('is_image'):
+                await media_jobs.process(['ffmpeg', '-v', 'error', '-y', '-i', data['path'], '-vf', thumbnail_filter,
+                                         '-frames:v', '1', str(sprite)], timeout=60)
+            elif data['duration'] > 600:
                 # Seek to the 60 samples; do not decode hours of frames just for a sprite.
                 for index in range(count):
                     await media_jobs.process(['ffmpeg', '-v', 'error', '-y', '-ss', str((index+.5)*interval),
@@ -380,7 +398,16 @@ async def render(vid, document, target, update, *, preview=False, source_documen
                     layout = layout.replace('[vout]', '[pane]') + f';[pane]pad={width}:{height}:0:0:color={frame.color}[vout]'
                 graph = f'[0:v]setpts=(PTS-STARTPTS)/{clip.speed},fps={fps}[timed];' + layout.replace('[0:v]', '[timed]')
                 source_in = clip.source_in + (begin-clip.start)*clip.speed
-                args += ['-ss', str(source_in), '-i', source['path']]
+                if source.get('is_image'):
+                    animated = clip.model_copy(update={'source_in': source_in})
+                    effect_graph = image_effects.clip_filter(animated, source, span, fps, document.width, document.height)
+                    layout, _ = editing.layout_filter(pane, document.width, document.height)
+                    if split:
+                        layout = layout.replace('[vout]', '[pane]') + f';[pane]pad={width}:{height}:0:0:color={frame.color}[vout]'
+                    graph = '[0:v]' + effect_graph + '[timed];' + layout.replace('[0:v]', '[timed]')
+                    args += ['-i', source['path']]
+                else:
+                    args += ['-ss', str(source_in), '-i', source['path']]
                 join = transitions.get(clip.id)
                 original = originals[clip.id]
                 elapsed = max(0, range_start + begin - original.start)
@@ -393,7 +420,8 @@ async def render(vid, document, target, update, *, preview=False, source_documen
                         and not c.overlay.hidden and c.overlay.layout == 'split' and c.start <= previous_time < c.start+c.duration
                         for c in (source_document or document).clips)
                     extra, transition_graph = timeline_transitions.compose(previous, previous_source, original.transition,
-                        transition_duration, elapsed, output_frame, fps, width, height, previous_split)
+                        transition_duration, elapsed, output_frame, fps, width, height, previous_split,
+                        image_size=(document.width, document.height))
                     args += extra
                     graph += ';' + transition_graph
                     video_output = 'transitioned'
@@ -402,8 +430,36 @@ async def render(vid, document, target, update, *, preview=False, source_documen
                 args += ['-f', 'lavfi', '-i', f'color=c={frame.color}:s={width}x{height}:r={fps}']
             args += ['-an', '-t', str(span), '-frames:v', str(round(span * fps)), '-c:v', 'libx264', '-preset', 'veryfast',
                 '-crf', '20', '-pix_fmt', 'yuv420p', '-progress', 'pipe:1', str(path)]
-            await media_jobs.process(args, timeout=max(180, span * 20),
-                                     on_line=progress(begin, span, 4, 51, f'Dựng hình · đoạn {index+1}/{len(segments)}'))
+            # Cache picture segments independently of voices, captions and final mix.
+            # Arguments include crop, transition phase, source seek and effect values.
+            import hashlib
+            cache_key = hashlib.sha256(json.dumps([2, args[:-1],
+                sorted((a['path'], a['fingerprint']) for a in assets.values() if a['path'] in args)], sort_keys=True).encode()).hexdigest()
+            cache_dir = directory(vid)/'picture-cache'
+            cache_dir.mkdir(exist_ok=True)
+            cached = cache_dir/f'{cache_key}.mp4'
+            if cached.is_file():
+                update(progress=4+round(51*(begin+span)/length), stage=f'Dùng lại hình · đoạn {index+1}/{len(segments)}')
+                cached.touch()
+            else:
+                temporary = cached.with_name(f'{cache_key}.{uuid.uuid4().hex}.part.mp4')
+                try:
+                    await media_jobs.process(args[:-1]+[str(temporary)], timeout=max(180, span * 20),
+                        on_line=progress(begin, span, 4, 51, f'Dựng hình · đoạn {index+1}/{len(segments)}'))
+                    temporary.replace(cached)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            try:
+                path.hardlink_to(cached)
+            except OSError:
+                # Portable to external exFAT/FAT volumes without hard-link support.
+                shutil.copyfile(cached, path)
+            # Bound this disposable cache; source images and exports remain separate.
+            total = 0
+            for entry in sorted(cache_dir.glob('*.mp4'), key=lambda p: p.stat().st_mtime, reverse=True):
+                total += entry.stat().st_size
+                if total > 256*1024**2 and entry != cached:
+                    entry.unlink(missing_ok=True)
         manifest = work / 'clips.txt'
         manifest.write_text('\n'.join(f"file 'clip{i}.mp4'" for i in range(len(segments))))
         stems = await audio_stems(document, assets, work, update, originals=originals,
@@ -457,7 +513,7 @@ async def render(vid, document, target, update, *, preview=False, source_documen
 
 async def proxy(vid, aid, update):
     data = asset(vid, aid)
-    if data['kind'] != 'video':
+    if data['kind'] != 'video' or data.get('is_image'):
         raise ValueError('Bản xem nhẹ chỉ dùng cho video.')
     target = directory(vid) / 'proxies' / f'{aid}.mp4'
     if target.is_file():

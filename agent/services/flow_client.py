@@ -170,6 +170,10 @@ class FlowClient:
     def _should_failover(result: dict) -> bool:
         """Return true for profile-local failures that another tab can solve."""
         message = str(result.get("error") or result.get("data") or "").lower()
+        # An anti-abuse rejection needs the user to check Flow, not another
+        # submission through a different signed-in profile.
+        if "public_error_unusual_activity" in message:
+            return False
         return any(marker in message for marker in (
             "no_flow_key",
             "no_flow_tab",
@@ -184,11 +188,6 @@ class FlowClient:
             "extension_switched",
             "public_error_per_model_daily_quota_reached",
             "public_error_user_quota_reached",
-            # A profile without the user's signed-in Flow tab can still
-            # return an RPC-level unusual-activity error after minting a
-            # captcha. Treat it as profile-local so another connected Chrome
-            # profile can handle the request.
-            "public_error_unusual_activity",
             # A profile without a loaded Flow page cannot mint reCAPTCHA. The
             # extension may report this before it reaches the RPC, so let the
             # next connected profile try instead.
@@ -460,6 +459,53 @@ class FlowClient:
                 logger.warning("Could not refresh reference image for character %s: %s", cid[:12], exc)
                 errors.append(f"{char.get('name', 'Nhân vật')}: chưa lấy được link ảnh. Kiểm tra ảnh còn trên Flow và đúng tài khoản đang mở.")
         return {"refreshed": refreshed, "skipped": skipped, "failed": len(errors), "errors": errors}
+
+    async def check_connection(self, timeout: float = 6) -> dict:
+        """Fresh, read-only round trip. Never mint captcha or submit a generation."""
+        result = {
+            "code": "extension_disconnected",
+            "checked_at": time.time(),
+            "extension_responded": False,
+            "extension_version": None,
+            "flow": {"state": "unknown", "tab_count": 0},
+        }
+        if not self.connected:
+            return {**result, "ws": self.ws_stats}
+
+        try:
+            reply = await asyncio.wait_for(
+                self._send("get_status", {"diagnose_flow": True}, timeout=timeout),
+                timeout=timeout + 1,
+            )
+        except asyncio.TimeoutError:
+            reply = {"error": "timeout"}
+
+        # Both HTTP callbacks and WebSocket replies may carry the result envelope.
+        status = reply.get("result", reply) if isinstance(reply, dict) else None
+        if not isinstance(status, dict) or reply.get("error") or status.get("error"):
+            result["code"] = "extension_unresponsive" if self.connected else "extension_disconnected"
+        else:
+            result["extension_responded"] = True
+            version = status.get("extensionVersion")
+            if isinstance(version, str) and len(version) <= 32 and all(c in "0123456789." for c in version):
+                result["extension_version"] = version
+            flow = status.get("flow")
+            states = {"no_tab", "tab_loading", "tab_discarded", "page_unavailable", "session_missing", "ready"}
+            if isinstance(flow, dict) and isinstance(flow.get("state"), str) and flow["state"] in states:
+                count = flow.get("tab_count")
+                result["flow"] = {
+                    "state": flow["state"],
+                    "tab_count": min(1000, max(0, count)) if type(count) is int else 0,
+                }
+                result["code"] = flow["state"]
+            else:
+                result["code"] = "extension_update_required"
+        # Only expose known fields; raw extension metrics may contain private data.
+        if not self.connected:
+            result["code"] = "extension_disconnected"
+            result["extension_responded"] = False
+            result["flow"] = {"state": "unknown", "tab_count": 0}
+        return {**result, "checked_at": time.time(), "ws": self.ws_stats}
 
     async def _send(self, method: str, params: dict, timeout: float = 300) -> dict:
         """Send request to extension and wait for response.

@@ -53,6 +53,6 @@ class GenerateSpeechRequest(BaseModel):
     force: bool = False
     automatic: bool = False
     language: Literal["vi", "en", "zh", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"] = "vi"
-    provider: Literal["configured", "codex", "claude", "agy"] = "configured"
+    provider: Literal["configured", "codex", "claude", "agy", "muse2api"] = "configured"
     synopsis: str = Field(default="", max_length=4000)
     glossary: str = Field(default="", max_length=4000)

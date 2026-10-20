@@ -46,6 +46,32 @@ async def snapshot_narration(vid, path):
     return target
 
 
+def scene_source(vid, clip, asset):
+    """Map restored pixels back to their immutable source without changing the edit."""
+    seen, source_in = set(), clip.source_in
+    while asset['ref'].startswith('propainter:'):
+        if asset['id'] in seen:
+            raise ValueError('Liên kết cảnh ProPainter bị vòng lặp; chưa nạp kết quả AI.')
+        seen.add(asset['id'])
+        rid = speech_store.identifier(asset['ref'].split(':', 1)[1])
+        record = speech_store.read_json(editing.directory(asset['owner'])/'propainter'/f'{rid}.json', {})
+        if not isinstance(record, dict) or not isinstance(record.get('targets'), list) or any(not isinstance(t, dict) for t in record['targets']):
+            raise ValueError('Thiếu liên kết cảnh gốc của ProPainter; chưa nạp kết quả AI.')
+        parents = {t.get('asset_id') for t in record['targets']}
+        start = record.get('start')
+        if (not record.get('full_resolution') or record.get('trial_id') != rid or len(parents) != 1 or None in parents
+                or not isinstance(start, (float, int)) or isinstance(start, bool) or not math.isfinite(start) or start < 0):
+            raise ValueError('Thiếu liên kết cảnh gốc của ProPainter; chưa nạp kết quả AI.')
+        parent = timeline.asset(vid, parents.pop())
+        if parent['fingerprint'] != record.get('source_fingerprint'):
+            raise ValueError('Nguồn ProPainter đã thay đổi; chưa nạp kết quả AI.')
+        source_in += start
+        asset = parent
+    if source_in + clip.duration * clip.speed > asset['duration'] + .05:
+        raise ValueError('Mốc cảnh ProPainter vượt nguồn gốc; chưa nạp kết quả AI.')
+    return clip.model_copy(update={'source_in': source_in}), asset
+
+
 async def import_results(vid, document, *, captions=True, voices=True, effects=True, legacy=False, source='auto', report=None):
     data = document.model_dump(mode='json')
     assets = timeline.validate_assets(vid, document)
@@ -120,6 +146,12 @@ async def import_results(vid, document, *, captions=True, voices=True, effects=T
             replacements[previous.id] = updated
     for c in picture:
         a = assets[str(c.asset_id)]
+        if not output_timing and a['ref'].startswith('propainter:'):
+            try:
+                c, a = scene_source(vid, c, a)
+            except (ValueError, OSError, TypeError, KeyError) as exc:
+                warnings.append(f"{a['name']}: {exc}")
+                continue
         # Only original sources and immutable Studio scene renders describe AI
         # timing. Arbitrary mixed exports still need their own script.
         scene_id = a['ref'].split(':')[1] if a['ref'].startswith('stickman:') else None

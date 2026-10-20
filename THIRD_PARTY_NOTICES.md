@@ -1,31 +1,41 @@
-# Third-party notices for FrameWeaver
+# Third-party notices
 
-FrameWeaver is maintained as its own project with additional editing, media, and
-speech workflows. It includes code adapted from
-[Flow Kit](https://github.com/crisng95/flowkit) under the MIT license.
+FrameWeaver is developed in <https://github.com/phucnguyentvp1/frameweaver>.
+Parts of the scene-generation backend, SDK, Chrome bridge and workflow recipes
+are adapted from Flow Kit and its Google Flow Agent base:
 
-The root `LICENSE` preserves the Flow Kit MIT copyright and permission notice for
-`tuannguyenhoangit-droid` for the reused code. The original README identifies that project as
-[google-flow-agent](https://github.com/tuannguyenhoangit-droid/google-flow-agent).
-Preserve that notice when distributing copies or substantial portions of the reused code.
-At the sharing review, GitHub resolved that historical repository address to
-[crisng95/flowkit](https://github.com/crisng95/flowkit). The snapshot's original
-copyright notice remains unchanged. This attribution does not assign authorship
-of FrameWeaver's additional features to the original project.
+- <https://github.com/crisng95/flowkit>
+- <https://github.com/tuannguyenhoangit-droid/google-flow-agent>
+- Original MIT copyright: 2026 tuannguyenhoangit-droid. The full notice remains
+  in `LICENSE`.
 
-The root license does not replace the terms attached to these bundled assets:
+The historical showcase in the inherited README comes from that source project;
+it is not a claim that those examples were produced by the FrameWeaver maintainer.
 
-| Files | Origin and notices |
-| --- | --- |
-| `agent/assets/vieneu/` | VieNeu 3.8.3 voice catalog. Origin, wheel checksum, and Apache-2.0 license are included in that directory. |
-| `agent/assets/voice_samples/` | Six VieNeu reference voice clips and transcripts. The local README records both the upstream Apache-2.0 repository license and a separate CC BY-NC 4.0 notice for the legacy voice presets. Keep both notices; do not describe all bundled media as MIT or assume commercial voice rights. |
-| `extension/recaptcha_enterprise.js`, `extension/recaptcha__en.js` | Bundled Google reCAPTCHA resources with their own embedded notices. Keep those notices. The root MIT license is not a license to Google services. |
-| `docs/images/` | `frameweaver_banner.svg` is the FrameWeaver banner; `frameweaver_dashboard.jpg` and `frameweaver_extension.jpg` were captured from its local UI. The historical generated-media examples in `docs/REFERENCE.md` originate from Flow Kit and are not demonstrations of FrameWeaver's added features. |
-| `docs/images/showcase/` | Five demo and workspace screenshots supplied by the FrameWeaver maintainer for the project showcase. Embedded EXIF/XMP metadata was removed without changing image pixels. These media examples are separate from the historical Flow Kit gallery; the code's MIT license does not establish rights to depicted platform branding or third-party content. |
+Optional integrations such as Muse gateway, VieNeu-TTS, Kokoro, Qwen3-TTS,
+Whisper and ProPainter retain their own code/model licenses. Installing or using
+them does not change their licenses. Their setup documentation and source links
+are in `docs/`; this product rename does not alter those third-party notices.
 
-Python and JavaScript dependencies retain their respective licenses. Optional
-downloaded TTS models and ProPainter runtimes are not included in the source
-package; review their code, model, and voice terms separately before use.
+## macOS core bundle
 
-FrameWeaver is a community tool and is not affiliated with
-Google, Anthropic, OpenAI, or the authors of its optional integrations.
+The macOS bundle additionally redistributes Electron (MIT and Chromium notices
+in `Contents/Resources`), CPython from python-build-standalone (Python and
+component licenses within `runtime/python`), and the Python packages listed in
+`runtime/BUILD-MANIFEST.json` (individual licenses in their `.dist-info` folders).
+
+`runtime/media/bin/ffmpeg` and `ffprobe` are built from FFmpeg 8.1 with x264,
+under the GPL. Their license files are in `runtime/media`. Exact source archives,
+checksums and the build recipe accompany each DMG as `*-media-sources.zip`.
+The pkgconf source in that archive is an ISC-licensed build tool, not a runtime
+dependency. See `desktop/README.md` and `desktop/media-build.py` in the source
+repository for upstream locations and pinned revisions.
+
+## Windows core bundle
+
+The Windows x64 bundle redistributes the same Electron/CPython components and
+Python package licenses under `resources/runtime`. FFmpeg 8.1 and x264 are built
+from the same pinned source revisions using MSYS2 UCRT64, with static libraries.
+Their GPL notices, source archives and Windows build recipe accompany the
+installer as `*-Windows-x64-media-sources.zip`. MSYS2/compiler tools and NSIS are
+build dependencies; they are not installed as a development environment for users.

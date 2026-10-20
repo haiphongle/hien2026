@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
+from pydantic import ValidationError
 
 from agent.services import media_jobs
 from agent.services.cli_providers import executable
@@ -32,13 +33,16 @@ def _codex_schema(node):
 async def complete(role: dict, prompt: str, *, schema: dict, images: tuple[Path, ...] = (), binary=None) -> str:
     provider, model, effort = role["provider"], role.get("model"), role.get("effort")
     binary = binary or executable(provider)
-    if not binary:
+    if not binary and provider != "muse2api":
         raise ValueError(f"Chưa tìm thấy {provider} trên máy. Chọn AI trong Cài đặt.")
     # A busy service refuses new interactive requests instead of accumulating
     # expensive, invisible jobs after browser retries.
     if _gate.locked():
         raise ValueError("AI đang xử lý một yêu cầu. Đợi hoàn tất rồi thử lại.")
     async with _gate:
+        if provider == 'muse2api':
+            from agent.services.muse_client import MuseClient
+            return await MuseClient().chat(prompt, schema, model=model, images=images)
         with tempfile.TemporaryDirectory(prefix="frameweaver-ai-") as directory:
             root = Path(directory)
             refs = []
@@ -93,7 +97,35 @@ def parse_json(raw: str) -> dict:
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.partition("\n")[2].rsplit("```", 1)[0]
-    result = json.loads(raw)
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError('AI trả JSON chưa hợp lệ. Chưa áp dụng thay đổi; thử lại bước AI.') from exc
     if not isinstance(result, dict):
         raise ValueError("AI trả định dạng không hợp lệ. Chưa áp dụng thay đổi.")
     return result
+
+
+async def complete_structured(role, prompt, *, contract, schema, images=()):
+    """Validate before applying; Muse gets one bounded format correction."""
+    raw = await complete(role, prompt, schema=schema, images=images)
+    try:
+        return contract.model_validate(parse_json(raw))
+    except ValueError as exc:
+        if role['provider'] != 'muse2api':
+            raise
+        issues = ([{'field': '.'.join(map(str, e['loc'])), 'problem': e['msg']}
+                   for e in exc.errors(include_input=False, include_context=False, include_url=False)][:20]
+                  if isinstance(exc, ValidationError) else [{'problem': 'Reply must be one complete valid JSON object.'}])
+    # Reuse the entire source and schema. Never ask AI to infer missing SRT
+    # timestamps from actions or apply an incomplete first response.
+    srt_hint = ' Preserve all SRT cue IDs, especially cue_start and cue_end for each SRT scene.' if 'SRTScene' in schema.get('$defs', {}) else ''
+    correction = (prompt + '\n\nYour previous reply failed validation. Return the COMPLETE corrected JSON only. '
+                  'Preserve the source, assigned references and identifiers. Include EVERY required field.'
+                  + srt_hint + ' No prose or Markdown.\n'
+                  + json.dumps({'validation_errors': issues, 'previous_reply': raw[:60000]}, ensure_ascii=False))
+    corrected = await complete(role, correction, schema=schema, images=images)
+    try:
+        return contract.model_validate(parse_json(corrected))
+    except ValueError as exc:
+        raise ValueError('Muse vẫn trả dữ liệu thiếu hoặc sai định dạng sau một lần sửa. Chưa áp dụng; thử lại tác vụ.') from exc

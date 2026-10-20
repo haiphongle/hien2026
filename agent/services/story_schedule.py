@@ -1,4 +1,5 @@
 """Local saved stories and a sequential, restart-safe production schedule."""
+from agent.services.image_effects import uses_ai
 import asyncio
 import logging
 import uuid
@@ -10,11 +11,12 @@ from agent.config import SHARED_OUTPUT_DIR
 from agent.db import crud
 from agent.models.stickman import CreateRequest
 from agent.models.timeline import TimelineModel
-from agent.services import media_jobs, media_library, speech_store, stickman
+from agent.services import media_jobs, media_library, speech_store, stickman, timeline
 from agent.services.flow_client import get_flow_client
 
 ROOT = SHARED_OUTPUT_DIR / 'story_schedule'
 lock = asyncio.Lock()
+wake = asyncio.Event()
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +57,8 @@ def write(item, **changes):
 
 def entries(pid=None):
     files = (ROOT / speech_store.identifier(pid)).glob('*.json') if pid else ROOT.glob('*/*.json')
-    return sorted((item for file in files if (item := speech_store.read_json(file))), key=lambda item: item['created_at'], reverse=True)
+    return sorted((item for file in files if (item := speech_store.read_json(file))),
+                  key=lambda item: (item['created_at'], -item.get('batch_order', 0)), reverse=True)
 
 
 def summary(item):
@@ -98,6 +101,12 @@ async def remove(pid, sid):
 
 
 async def sync(item):
+    if item['status'] == 'PLANNING':
+        from agent.services import content_production
+        if not content_production.planning(item):
+            write(item, status='FAILED', stage='Lên kịch bản bị gián đoạn',
+                  error='Máy chủ đã khởi động lại. Bấm Tiếp tục để lên kịch bản; không tự tạo lượt trùng.')
+        return
     if item['status'] not in {'STARTING', 'RUNNING', 'REVIEW', 'FAILED', 'CANCELLED'} or not item.get('video_id'):
         return
     video = await crud.get_video(item['video_id'], include_trashed=True)
@@ -119,42 +128,88 @@ async def sync(item):
                   'Máy chủ dừng khi khởi tạo video. Bản tạo dở được giữ trong dự án; nạp kịch bản để hẹn lại.'))
         return
     state = job['status']
+    if item.get('paused') and state not in media_jobs.ACTIVE and job.get('id') == item.get('job_id'):
+        return
     status = 'RUNNING' if state in media_jobs.ACTIVE else 'REVIEW' if state == 'COMPLETED' and job.get('result', {}).get('preview_url') else state
-    changes = dict(status=status, progress=job.get('progress', 0), stage=job.get('stage', ''), error=job.get('error'))
+    changes = dict(status=status, progress=job.get('progress', 0), stage=job.get('stage', ''), error=job.get('error'),
+                   job_id=job.get('id'), url=job.get('result', {}).get('url'), preview_url=job.get('result', {}).get('preview_url'))
+    if item.get('paused'):
+        changes['paused'] = False  # A new Studio retry can resume the same saved video.
     if any(item.get(key) != value for key, value in changes.items()):
         write(item, **changes)
 
 
 async def tick():
+    from agent.services import storage_locations
+    if storage_locations.busy() or storage_locations.offline('output'):
+        return
+    from agent.services import content_production
     async with lock:
+        content_production.recover_batches()
         items = entries()
         for item in items:
             await sync(item)
-        # Share the generation queue; never start a second scheduled production
-        # while another media job or a preview approval is outstanding.
-        if any(item['status'] in {'STARTING', 'RUNNING', 'REVIEW'} for item in items) or media_jobs.busy():
+        # Reviews release their slot. ASR/TTS and exports keep their shared locks;
+        # provider image/video requests still go through the existing batch queue.
+        active = sum(item['status'] in {'STARTING', 'RUNNING', 'PLANNING'} for item in items)
+        capacity = content_production.limits().videos
+        if active >= capacity:
             return
         due = sorted((item for item in items if item['status'] in {'SCHEDULED', 'WAITING'}
-                      and datetime.fromisoformat(item['run_at']) <= datetime.now(timezone.utc)), key=lambda item: item['run_at'])
+                      and datetime.fromisoformat(item['run_at']) <= datetime.now(timezone.utc)),
+                     key=lambda item: (item['run_at'], item['created_at'], item.get('batch_order', 0)))
         for item in due:
+            if active >= capacity:
+                break
             try:
                 project = await crud.get_project(item['project_id'])
                 if not project or project.get('status') != 'ACTIVE':
                     raise ValueError('Dự án chưa mở. Mở lại dự án rồi đặt lịch lại.')
+                if item.get('needs_plan'):
+                    if not any(row['status'] == 'PLANNING' for row in items):
+                        content_production.start_plan(item)
+                        active += 1
+                    continue
                 body = CreateRequest.model_validate(item['settings'])
-                if body.motion != 'talk' and not get_flow_client().connected:
+                needs_media = True
+                if item.get('content') and item.get('video_id'):
+                    pending = speech_store.read_json(stickman.directory(item['video_id'])/'pending.json', {})
+                    needs_media = not timeline.load(item['video_id']) or bool(pending and not pending.get('ready'))
+                try:
+                    content_production.require_space()
+                except ValueError as exc:
+                    if item['status'] != 'WAITING' or item.get('error') != str(exc):
+                        write(item, status='WAITING', error=str(exc))
+                    continue
+                if needs_media and body.motion != 'talk' and (body.image_provider == 'flow' or uses_ai(body) and body.video_provider == 'flow') and not get_flow_client().connected:
                     if item['status'] != 'WAITING':
                         write(item, status='WAITING', error='Đang chờ Google Flow và extension kết nối.')
                     continue
+                if needs_media and body.motion != 'talk' and (body.image_provider == 'muse2api' or uses_ai(body) and body.video_provider == 'muse2api'):
+                    from agent.services.muse_client import MuseClient, MuseError
+                    try:
+                        await asyncio.wait_for(MuseClient().readiness(), timeout=8)
+                    except (MuseError, TimeoutError) as exc:
+                        reason = str(exc) or 'Muse chưa trả trạng thái. Kiểm tra kết nối gateway.'
+                        if item['status'] != 'WAITING' or item.get('error') != reason:
+                            write(item, status='WAITING', error=reason)
+                        continue
                 async with media_library.lock:
                     await stickman.validate(body, project)
+                    if item.get('content') and item.get('video_id'):
+                        from agent.api.stickman import retry
+                        from agent.models.stickman import RetryRequest
+                        job = await retry(uuid.UUID(item['video_id']), RetryRequest(approve_preview=item.get('approve_preview', False)))
+                        write(item, status='RUNNING', job_id=job['id'], approve_preview=False, paused=False)
+                        active += 1
+                        continue
                     # Persist identity before any side effect, so an interrupted
                     # startup cannot accidentally create the same story twice.
                     vid = str(uuid.uuid4())
                     write(item, status='STARTING', video_id=vid, error=None)
                     result = await stickman.create_story(project, body, video_id=vid)
                     write(item, status='RUNNING', job_id=result['job']['id'])
-                return
+                    active += 1
             except asyncio.CancelledError:
                 if item['status'] == 'STARTING':
                     write(item, status='FAILED', video_id=None, error='Máy chủ đã dừng. Nạp kịch bản để kiểm tra và đặt lịch lại.')
@@ -167,8 +222,12 @@ async def tick():
 
 async def run():
     while True:
+        wake.clear()
         try:
             await tick()
         except Exception:
             logger.exception('Could not check saved story schedule')
-        await asyncio.sleep(30)
+        try:
+            await asyncio.wait_for(wake.wait(), timeout=5)
+        except TimeoutError:
+            pass

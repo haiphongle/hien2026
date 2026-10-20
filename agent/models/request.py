@@ -1,10 +1,12 @@
-from pydantic import BaseModel, model_validator
-from typing import Optional
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional, Literal
 from agent.models.enums import RequestType, Orientation
 from agent.models.video_model import VideoModel
 
 
 class RequestCreate(BaseModel):
+    provider: Literal["flow", "muse2api"] = "flow"
+    provider_model: Optional[str] = Field(default=None, min_length=1, max_length=160, pattern=r'^\S+$')
     type: RequestType
     orientation: Optional[Orientation] = None
     scene_id: Optional[str] = None
@@ -17,6 +19,12 @@ class RequestCreate(BaseModel):
     @model_validator(mode="after")
     def check_required_fields(self) -> "RequestCreate":
         req_type = self.type
+        if self.provider == 'muse2api':
+            from agent.services.muse_media import SUPPORTED
+            if req_type not in SUPPORTED or self.video_model:
+                raise ValueError('Muse chỉ hỗ trợ ảnh và video từ ảnh đầu; không dùng model Google Flow.')
+        elif self.provider_model:
+            raise ValueError('provider_model chỉ dùng cho Muse.')
         if self.video_model and req_type not in ('GENERATE_VIDEO', 'REGENERATE_VIDEO', 'GENERATE_VIDEO_OMNI'):
             raise ValueError('video_model chỉ dùng cho clip từ ảnh đầu.')
         if req_type == 'GENERATE_VIDEO_OMNI' and self.video_model not in (None, 'abra_i2v_8s'):
@@ -39,6 +47,8 @@ class RequestCreate(BaseModel):
 
 class Request(BaseModel):
     id: str
+    provider: Literal["flow", "muse2api"] = "flow"
+    provider_model: Optional[str] = None
     project_id: Optional[str] = None
     video_id: Optional[str] = None
     scene_id: Optional[str] = None

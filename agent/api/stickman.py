@@ -16,6 +16,7 @@ from agent.config import SHARED_OUTPUT_DIR
 from agent.services import media_jobs, media_library, speech_store, stickman, stickman_models, timeline
 from agent.services import stickman_direction as direction
 from agent.services import stickman_styles
+from agent.services.image_effects import uses_ai
 from agent.services import story_schedule
 from agent.services import story_style_previews
 from agent.services.stickman_production import estimate, image_signature, preview_versions, record_preview, storyboard_images
@@ -47,10 +48,23 @@ def flow_ready():
         raise HTTPException(503, 'Mở Google Flow và kết nối extension trước khi tạo ảnh.')
 
 
+async def media_ready(body):
+    if body.motion == 'talk':
+        return
+    if body.image_provider == 'flow' or uses_ai(body) and body.video_provider == 'flow':
+        flow_ready()
+    if body.image_provider == 'muse2api' or uses_ai(body) and body.video_provider == 'muse2api':
+        from agent.services.muse_client import MuseClient, MuseError
+        try:
+            await MuseClient().readiness()
+        except MuseError as exc:
+            raise HTTPException(503, str(exc)) from exc
+
+
 @router.get('/projects/{pid}/stickman/schedule')
 async def scheduled_stories(pid: UUID):
     await project(pid)
-    return [story_schedule.summary(item) for item in story_schedule.entries(str(pid))]
+    return [story_schedule.summary(item) for item in story_schedule.entries(str(pid)) if not item.get('content')]
 
 
 @router.get('/projects/{pid}/stickman/schedule/{sid}')
@@ -97,12 +111,13 @@ async def delete_scheduled_draft(pid: UUID, sid: UUID):
 @router.get('/projects/{pid}/stickman/options')
 async def options(pid: UUID):
     item = await project(pid)
+    from agent.services import image_effects
     return {'presets': [{**{k: v for k, v in p.items() if k not in {'character_design', 'reference_version', 'material_override'}},
                          'name': p.get('name') or get_material(p['id'])['name'],
                          'category': story_category(p['id']),
                          **(story_style_previews.presentation(p['id'], str(pid)) if p.get('collection') == 'html' else {}),
                          'local_actor': p.get('local_actor', True)} for p in stickman.PRESETS],
-            'video_models': stickman_models.options(),
+            'video_models': stickman_models.options(), 'image_effects': image_effects.catalog(),
             'default_video_models': {orientation: stickman_models.default_model(item, orientation) for orientation in ('VERTICAL', 'HORIZONTAL')}}
 
 
@@ -266,8 +281,7 @@ async def style_proof_image(pid: UUID, sid: UUID, kind: str):
 @router.post('/projects/{pid}/stickman/videos', status_code=202, dependencies=[Depends(media_library.guard)])
 async def create(pid: UUID, body: CreateRequest):
     item = await project(pid)
-    if body.motion != 'talk':
-        flow_ready()
+    await media_ready(body)
     try:
         await stickman.validate(body, item)
     except (ValueError, FileNotFoundError) as exc:
@@ -286,7 +300,8 @@ async def job(vid: UUID):
         raise HTTPException(409, 'Video đang dùng một tác vụ hậu kỳ khác. Mở timeline để kiểm tra.')
     if current and current['status'] == 'COMPLETED' and current.get('result', {}).get('preview_url'):
         return {**current, 'stage': 'Ảnh các cảnh · chờ duyệt' if body.preview_all else 'Ảnh mẫu · chờ duyệt', 'progress': 45}
-    if current and current['status'] in {'FAILED', 'CANCELLED'} and stickman_models.needs_clips(str(vid), body, stickman.directory(str(vid))):
+    uses_flow = body.image_provider == 'flow' or uses_ai(body) and body.video_provider == 'flow'
+    if uses_flow and current and current['status'] in {'FAILED', 'CANCELLED'} and stickman_models.needs_media(str(vid), body, stickman.directory(str(vid))):
         return {**current, 'model_recovery': stickman_models.recovery(current, body, await project(item['project_id']))}
     return current
 
@@ -296,9 +311,7 @@ async def retry(vid: UUID, request: RetryRequest | None = None):
     request = request or RetryRequest()
     item, body = await saved_video(vid)
     ensure_idle(str(vid))
-    pending = speech_store.read_json(stickman.directory(str(vid))/'pending.json', {})
-    if body.motion != 'talk' and (not timeline.load(str(vid)) or pending and not pending.get('ready')):
-        flow_ready()
+    needs_media = stickman_models.needs_media(str(vid), body, stickman.directory(str(vid)))
     try:
         current = media_jobs.latest(str(vid))
         if request.job_id and (not current or str(request.job_id) != current['id']):
@@ -312,7 +325,15 @@ async def retry(vid: UUID, request: RetryRequest | None = None):
             return current
         owner = await project(item['project_id'])
         message = None
-        if stickman_models.needs_clips(str(vid), body, stickman.directory(str(vid))):
+        if request.media_provider:
+            if not needs_media or not current or current['status'] not in {'FAILED', 'CANCELLED'}:
+                raise HTTPException(422, 'Chỉ đổi nhà cung cấp cho tác vụ đã dừng còn ảnh hoặc clip cần tạo.')
+            if any(r['status'] in {'PENDING', 'PROCESSING'} for r in await crud.list_requests(video_id=str(vid))):
+                raise HTTPException(409, 'Còn yêu cầu tạo ảnh/video đang chạy. Đợi hoàn tất trước khi chuyển sang Muse để tránh tạo trùng.')
+            body = body.model_copy(update={'image_provider': 'muse2api',
+                **({'video_provider': 'muse2api', 'video_model': None} if uses_ai(body) else {})})
+            message = 'Đã chuyển sang Muse cho ảnh và clip còn thiếu. Giữ kịch bản, ảnh, giọng và clip đã hoàn tất; không thay đổi nhà cung cấp của video khác.'
+        elif body.video_provider == 'flow' and stickman_models.needs_clips(str(vid), body, stickman.directory(str(vid))):
             recovery = stickman_models.recovery(current or {}, body, owner)
             automatic = not request.video_model and request.auto_switch and recovery['auto_switch']
             model = request.video_model or (recovery['retry_model'] if automatic else recovery['current_model'])
@@ -325,6 +346,8 @@ async def retry(vid: UUID, request: RetryRequest | None = None):
             message = stickman_models.notice((current or {}).get('video_model'), model, automatic)
         elif request.video_model:
             raise HTTPException(422, 'Không còn clip cần tạo. Model chỉ thay đổi cho phần clip còn thiếu.')
+        if needs_media:
+            await media_ready(body)
         await stickman.validate(body, owner)
         if request.regenerate_preview:
             active = [r for r in await crud.list_requests(video_id=str(vid)) if r['status'] in {'PENDING', 'PROCESSING'}]
@@ -458,6 +481,9 @@ async def save_template(pid: UUID, body: ProductionTemplate):
 async def revise(vid: UUID, body: CreateRequest):
     item, old = await saved_video(vid)
     ensure_idle(str(vid))
+    if any(getattr(body, key) != getattr(old, key) for key in ('image_provider', 'video_provider', 'video_model')):
+        if any(r['status'] in {'PENDING', 'PROCESSING'} for r in await crud.list_requests(video_id=str(vid))):
+            raise HTTPException(409, 'Còn yêu cầu tạo ảnh/video đang chạy. Đợi kết quả trước khi đổi nhà cung cấp hoặc model để tránh tạo trùng.')
     scenes = await crud.list_scenes(str(vid))
     if len(body.scenes) != len(scenes):
         raise HTTPException(422, 'Đổi số cảnh: tạo video mới để giữ bản dựng đã có.')
@@ -466,8 +492,7 @@ async def revise(vid: UUID, body: CreateRequest):
     if saved and saved['document'] != result.get('result', {}).get('timeline'):
         raise HTTPException(409, 'Timeline đã được chỉnh thủ công. Tạo video mới để giữ các chỉnh sửa; cử chỉ có thể sửa ngay trên đoạn đã chọn.')
     owner = await project(item['project_id'])
-    if body.motion != 'talk':
-        flow_ready()
+    await media_ready(body)
     try:
         await stickman.validate(body, owner)
     except (ValueError, FileNotFoundError) as exc:
@@ -475,7 +500,11 @@ async def revise(vid: UUID, body: CreateRequest):
     root = stickman.directory(str(vid))
     generation = speech_store.read_json(root/'generation.json', {})
     for scene, planned in zip(scenes, old.scenes):
-        generation.setdefault(scene['id'], {}).setdefault('image', image_signature(old, planned))
+        state = generation.setdefault(scene['id'], {})
+        # Bind legacy image keys to the original expression before saving the edited plan.
+        if not state.get('image') or (state.get('image_version') != 2 and state['image'] == image_signature(old, planned, legacy=True)):
+            state['image'] = image_signature(old, planned)
+        state['image_version'] = 2
     speech_store.atomic_json(root/'generation.json', generation)
     speech_store.atomic_json(root/'plans'/f'{uuid.uuid4()}.json', old.model_dump(mode='json'))
     speech_store.atomic_json(root/'pending.json', {'rebuild': True, 'revision': (saved or {}).get('revision', 0)})

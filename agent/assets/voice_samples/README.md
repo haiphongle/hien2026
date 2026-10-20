@@ -11,5 +11,5 @@ v3 Turbo preset assets and their published licensing terms.
 The filenames use stable ASCII identifiers to work across filesystems.
 
 These are reference audio clips for the existing OmniVoice engine, not a
-VieNeu inference backend. Keeping the small library inside FlowKit means
+VieNeu inference backend. Keeping the small library inside FrameWeaver means
 previews still work if the downloaded VieNeu source folder is moved or removed.

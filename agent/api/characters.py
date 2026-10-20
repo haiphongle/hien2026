@@ -62,8 +62,12 @@ async def update(cid: str, body: CharacterUpdate):
 
 
 @router.delete("/{cid}")
-async def delete(cid: str):
-    repo = _get_repo()
-    if not await repo.delete_character(cid):
-        raise HTTPException(404, "Character not found")
-    return {"ok": True}
+async def delete(cid: str, project_id: str | None = None):
+    from agent.services import library_deletion
+    return await library_deletion.delete_character(cid, project_id)
+
+
+@router.get('/{cid}/deletion-info')
+async def deletion_info(cid: str, project_id: str | None = None):
+    from agent.services import library_deletion
+    return await library_deletion.character_info(cid, project_id)

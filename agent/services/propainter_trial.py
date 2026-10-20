@@ -8,16 +8,42 @@ import re
 import tempfile
 import time
 import uuid
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 
 from agent.models.editing import EditingSettings
-from agent.services import editing, media_jobs
+from agent.services import editing, media_jobs, model_storage
 from agent.services.speech_store import atomic_json, read_json
+from agent.paths import DATA_DIR, RESOURCE_DIR
 
-PROJECT = Path(__file__).resolve().parents[2]
+PROJECT = DATA_DIR
 CACHE = PROJECT / '.flowkit' / 'propainter'
 PYTHON = PROJECT / '.venvs' / 'propainter' / 'bin' / 'python'
 LOCK = asyncio.Lock()
 WEIGHTS = ('ProPainter.pth', 'raft-things.pth', 'recurrent_flow_completion.pth')
+_session = ContextVar('propainter_session', default=None)
+
+
+def weights_directory():
+    return model_storage.location('propainter', CACHE / 'weights', preserve_existing=True)
+
+
+@asynccontextmanager
+async def inference_session():
+    """Nested clip/trial calls reuse their batch's lock and lazy model process."""
+    from agent.services.propainter_runtime import ProPainterSession
+    if _session.get() is not None:
+        yield _session.get()
+        return
+    async with LOCK:
+        model_storage.assert_weights('propainter', weights_directory(), WEIGHTS)
+        session = ProPainterSession(PYTHON, RESOURCE_DIR / 'tools' / 'propainter_worker.py', source_directory())
+        token = _session.set(session)
+        try:
+            yield session
+        finally:
+            _session.reset(token)
+            await session.close()
 
 
 def source_directory():
@@ -27,9 +53,14 @@ def source_directory():
 
 def availability():
     benchmark = editing.read_json(CACHE / 'benchmark.json', {})
+    try:
+        model_storage.assert_weights('propainter', weights_directory(), WEIGHTS)
+        model_error = None
+    except ValueError as exc:
+        model_error = str(exc)
     reason = ('Thiếu mã nguồn ProPainter. Cần khôi phục môi trường xử lý.' if not (source_directory() / 'inference_propainter.py').is_file()
               else 'Thiếu môi trường Python ProPainter.' if not PYTHON.is_file()
-              else 'Thiếu trọng số ProPainter.' if not all((CACHE / 'weights' / name).is_file() for name in WEIGHTS)
+              else model_error if model_error
               else 'Môi trường ProPainter chưa đạt thử nghiệm.' if benchmark.get('status') != 'COMPLETED' else None)
     return {'available': reason is None, 'unavailable_reason': reason, 'benchmark': benchmark, 'max_seconds': 3, 'max_frames': 60, 'max_side': 320,
             'scope': 'Xử lý đoạn 1–3 giây, tối đa 60 khung hình, cạnh dài 320 pixel.'}
@@ -49,7 +80,8 @@ async def inpaint(work, width, height, dilation, update):
                 pass
             await asyncio.sleep(.25)
     def line(text):
-        phases = {'flow': ('AI đang tính chuyển động', 20), 'complete': ('AI đang khôi phục chuyển động vùng xóa', 40),
+        phases = {'load': ('Nạp model lần đầu cho tác vụ', 15),
+                  'flow': ('AI đang tính chuyển động', 20), 'complete': ('AI đang khôi phục chuyển động vùng xóa', 40),
                   'propagate': ('AI đang lấp nền từ các khung lân cận', 55), 'inpaint': ('AI đang tái tạo chi tiết nền', 65)}
         if match := re.search(r'FLOWKIT_STAGE:(\w+)', text):
             if match[1] in phases:
@@ -59,8 +91,8 @@ async def inpaint(work, width, height, dilation, update):
             update(stage=f'AI tái tạo nền: lượt {match[2]}/{match[3]}', progress=65 + round(int(match[1]) * .2))
     observer = asyncio.create_task(monitor())
     try:
-        await media_jobs.process([str(PYTHON), '-u', str(PROJECT / 'tools' / 'propainter_worker.py'), '--work', str(work),
-            '--source', str(source_directory()), '--width', str(width), '--height', str(height), '--dilation', str(dilation)], timeout=300, on_line=line)
+        async with inference_session() as session:
+            await session.run(work, width, height, dilation, line)
     finally:
         observer.cancel()
         await asyncio.gather(observer, return_exceptions=True)
@@ -98,13 +130,35 @@ def results(vid):
 async def source_info(path):
     raw = await media_jobs.process(['ffprobe', '-v', 'error', '-show_streams', '-show_format', '-of', 'json', str(path)], timeout=30)
     data = json.loads(raw)
-    stream = next(s for s in data['streams'] if s['codec_type'] == 'video')
+    streams = data.get('streams') or []
+    stream = next((s for s in streams if s.get('codec_type') == 'video'), None)
+    if not stream:
+        raise ValueError('Tư liệu không có hình ảnh để xử lý ProPainter.')
     from fractions import Fraction
-    rate = Fraction(stream['avg_frame_rate'])
-    if not 0 < float(rate) <= 60:
+    rate = None
+    for key in ('avg_frame_rate', 'r_frame_rate'):
+        try:
+            candidate = Fraction(stream.get(key, ''))
+            if candidate > 0:
+                rate = candidate
+                break
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+    if rate is None or rate > 60:
         raise ValueError('FPS nguồn không phù hợp để thử ProPainter.')
+    duration = 0
+    for value in ((data.get('format') or {}).get('duration'), stream.get('duration')):
+        try:
+            candidate = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(candidate) and candidate > 0:
+            duration = candidate
+            break
+    if not duration:
+        raise ValueError('Không đọc được thời lượng video. Chuẩn hóa file trước khi dùng ProPainter.')
     return {'width': int(stream['width']), 'height': int(stream['height']), 'fps': str(rate), 'fps_number': float(rate),
-            'duration': float(data['format']['duration']), 'has_audio': any(s['codec_type'] == 'audio' for s in data['streams'])}
+            'duration': duration, 'has_audio': any(s.get('codec_type') == 'audio' for s in streams)}
 
 
 def validate(settings, region_id, start, duration, info):
@@ -129,10 +183,10 @@ async def run_trial(vid, source, settings: EditingSettings, region, start, durat
     record = target.with_suffix('.json')
     target.parent.mkdir(parents=True, exist_ok=True)
     update(stage='Đang chờ worker ProPainter', progress=0)
-    async with LOCK:
+    async with inference_session():
         with tempfile.TemporaryDirectory(prefix='trial-', dir=CACHE) as folder:
             work = Path(folder)
-            (work / 'weights').symlink_to(CACHE / 'weights', target_is_directory=True)
+            (work / 'weights').symlink_to(weights_directory(), target_is_directory=True)
             (work / 'frames').mkdir()
             clean = settings.model_copy(update={'regions': []}, deep=True)
             graph, _, size = editing.processing_filter(clean, info['width'], info['height'])

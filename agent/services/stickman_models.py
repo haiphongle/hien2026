@@ -1,5 +1,6 @@
 """Explicit model recovery for Studio; never changes global model settings."""
 from agent import config
+from agent.services.image_effects import uses_ai
 from agent.models.video_model import VIDEO_MODEL_NAMES
 from agent.services import flow_batch, speech_store, timeline
 
@@ -23,12 +24,16 @@ def default_model(project, orientation):
 
 
 def needs_clips(vid, body, root):
+    return uses_ai(body) and needs_media(vid, body, root)
+
+
+def needs_media(vid, body, root):
     pending = speech_store.read_json(root/'pending.json', {})
-    return body.motion == 'ai' and (not timeline.load(vid) or bool(pending and not pending.get('ready')))
+    return body.motion != 'talk' and (not timeline.load(vid) or bool(pending and not pending.get('ready')))
 
 
 def recovery(job, body, project):
-    model = job.get('video_model') or selected(body, project)
+    model = job.get('video_model') if job.get('video_model') in VIDEO_MODEL_NAMES else selected(body, project)
     error = (job.get('error') or '').lower()
     clip_error = 'clip hoạt hình' in (job.get('stage') or '').lower() or 'model video' in error
     denied = job.get('error_code') == 'VIDEO_MODEL_ACCESS_DENIED' or clip_error and (
@@ -36,7 +41,7 @@ def recovery(job, body, project):
     # Legacy failures did not record a model: first try the current ordinary Lite.
     target = ('abra_i2v_8s' if model == 'veo_3_1_i2v_lite' else 'veo_3_1_i2v_lite') if job.get('video_model') else 'veo_3_1_i2v_lite'
     return {'current_model': model, 'retry_model': target if denied else model, 'auto_switch': denied,
-            'models': [{'id': key, 'name': name} for key, name in VIDEO_MODEL_NAMES.items()]}
+            'models': [{'id': key, 'name': name} for key, name in VIDEO_MODEL_NAMES.items()] if uses_ai(body) and body.video_provider == 'flow' else []}
 
 
 def notice(previous, model, automatic):

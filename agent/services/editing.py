@@ -9,6 +9,7 @@ from typing import BinaryIO
 from pathlib import Path
 
 from agent.config import SHARED_OUTPUT_DIR
+from agent.paths import DESKTOP, RESOURCE_DIR
 from agent.models.editing import CaptionStyle, ColorSettings, EditingSettings, FrameSettings
 from agent.services.ffmpeg_progress import processing_timeout, run_ffmpeg
 from agent.services.speech_store import atomic_json, identifier, read_json
@@ -28,6 +29,15 @@ FONT_PATHS = {
     "mono": ("Mono", ("/System/Library/Fonts/Supplemental/Courier New.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "C:/Windows/Fonts/cour.ttf")),
     "cjk": ("Trung / Nhật / Hàn", CJK_FONT_PATHS),
 }
+
+if DESKTOP:
+    _fonts = RESOURCE_DIR.parent / 'fonts'
+    _bundled = {'sans': 'DejaVuSans.ttf', 'sans-bold': 'DejaVuSans-Bold.ttf',
+                'serif': 'DejaVuSerif.ttf', 'mono': 'DejaVuSansMono.ttf',
+                'cjk': 'NotoSansCJKsc-Regular.otf'}
+    CJK_FONT_PATHS = (str(_fonts / _bundled['cjk']), *CJK_FONT_PATHS)
+    FONT_PATHS = {key: (label, (str(_fonts / _bundled[key]), *paths))
+                  for key, (label, paths) in FONT_PATHS.items()}
 
 
 def directory(vid: str) -> Path:
@@ -221,7 +231,7 @@ def source_volume(source: Path, target: Path, volume: float, progress_callback=N
     return target
 
 
-def caption_image(text: str, width: int, height: int, style: CaptionStyle, output: Path | BinaryIO):
+def caption_image(text: str, width: int, height: int, style: CaptionStyle, output: Path | BinaryIO, *, text_box=None):
     from PIL import Image, ImageDraw, ImageFont
     from agent.services.post_process import _wrap_caption_lines
 
@@ -230,32 +240,49 @@ def caption_image(text: str, width: int, height: int, style: CaptionStyle, outpu
     size = max(8, round(height * style.size / 100))
     safe_x, safe_y = round(width * .07), round(height * style.margin / 100)
     available = max(20, width - 2 * safe_x)
+    if text_box:
+        available = text_box[2]
     font_file = font_path(style.font_id, text)
     # Auto shrink unusually long demo/caption pages so the block stays inside the frame.
     while True:
         font = ImageFont.truetype(font_file, size)
         stroke = min(style.outline, max(0, size // 4))
+        wrap_width = max(1, available - 2 * stroke if text_box else available - 2 * stroke - size)
         lines = [line for paragraph in text.split('\n')
-                 for line in (_wrap_caption_lines(paragraph, font, draw, available - 2 * stroke - size) or [''])]
+                 for line in (_wrap_caption_lines(paragraph, font, draw, wrap_width) or [''])]
         boxes = [draw.textbbox((0, 0), line, font=font, stroke_width=stroke) for line in lines]
         line_height = max([round(size * 1.3), *(b[3] - b[1] for b in boxes)])
         padding = round(size * .45) + stroke
         block_height = len(lines) * line_height + 2 * padding
-        if block_height <= height - 2 * safe_y or size <= 8:
+        if text_box or block_height <= height - 2 * safe_y or size <= 8:
             break
         size -= 1
     block_width = min(available, max((b[2] - b[0] for b in boxes), default=0) + 2 * padding)
     left = {"left": safe_x, "center": (width - block_width) // 2, "right": width - safe_x - block_width}[style.align]
     top = {"top": safe_y, "middle": (height - block_height) // 2, "bottom": height - safe_y - block_height}[style.position]
+    overflow = False
+    text_top = top + padding
+    if text_box:
+        left, top, block_width, box_height = text_box
+        padding = 0
+        content_height = max(0, len(lines) - 1) * line_height + max((b[3] - b[1] for b in boxes), default=0)
+        overflow = content_height > box_height or any(b[2] - b[0] > block_width for b in boxes)
+        # A smaller box wraps the text; it never changes the requested font size.
+        # Overflow stays visible in the frame and is reported to the editor.
+        text_top = top if content_height > box_height else {
+            'top': top, 'middle': top + (box_height - content_height) // 2,
+            'bottom': top + box_height - content_height}[style.position]
+        block_height = box_height
     def rgba(color, alpha=255):
         return (*tuple(int(color[i:i + 2], 16) for i in (1, 3, 5)), alpha)
     draw.rounded_rectangle((left, top, left + block_width, top + block_height), radius=max(2, round(size * .22)), fill=rgba(style.background_color, round(style.background_opacity * 255)))
     for index, (line, box) in enumerate(zip(lines, boxes)):
         lw = box[2] - box[0]
         x = {"left": left + padding, "center": left + (block_width - lw) // 2, "right": left + block_width - padding - lw}[style.align]
-        y = top + padding + index * line_height
+        y = text_top + index * line_height
         draw.text((x - box[0], y - box[1]), line, font=font, fill=rgba(style.color), stroke_width=stroke, stroke_fill=rgba(style.outline_color))
     image.save(output, "PNG")
+    return overflow
 
 
 def still_preview(source: Path, target: Path, settings: EditingSettings, time: float, text: str, *, video_id=None):

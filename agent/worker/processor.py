@@ -43,11 +43,15 @@ class APIRateLimiter:
 
     async def acquire(self):
         await self._semaphore.acquire()
-        async with self._gate:
-            elapsed = time.monotonic() - self._last_call
-            if elapsed < self._cooldown:
-                await asyncio.sleep(self._cooldown - elapsed)
-            self._last_call = time.monotonic()
+        try:
+            async with self._gate:
+                elapsed = time.monotonic() - self._last_call
+                if elapsed < self._cooldown:
+                    await asyncio.sleep(self._cooldown - elapsed)
+                self._last_call = time.monotonic()
+        except BaseException:
+            self._semaphore.release()
+            raise
 
     def release(self):
         self._semaphore.release()
@@ -60,6 +64,9 @@ class WorkerController:
         self._shutdown = asyncio.Event()
         self._active_ids: set[str] = set()
         self._rate_limiter = APIRateLimiter(MAX_CONCURRENT_REQUESTS, API_COOLDOWN)
+        self._muse_limiter = APIRateLimiter(1, 3)
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._active_providers: dict[str, str] = {}
         self._deferred: dict[str, float] = {}  # rid -> defer_until timestamp
         self._retry_after: dict[str, float] = {}  # rid -> retry_after timestamp
 
@@ -103,19 +110,21 @@ class WorkerController:
 
         while not self._shutdown.is_set():
             try:
-                if not client.connected:
+                from agent.services import storage_locations
+                if storage_locations.busy() or storage_locations.offline('output'):
                     await asyncio.sleep(POLL_INTERVAL)
                     continue
-
+                from agent.services.muse_settings import configured
                 now = time.time()
-                slots_available = MAX_CONCURRENT_REQUESTS - len(self._active_ids)
-                if slots_available <= 0:
-                    await asyncio.sleep(POLL_INTERVAL)
-                    continue
-
-                pending = await crud.list_actionable_requests(
-                    exclude_ids=self._active_ids, limit=slots_available
-                )
+                pending = []
+                for provider, ready, maximum in [('flow', client.connected, MAX_CONCURRENT_REQUESTS), ('muse2api', configured(), 1)]:
+                    slots = maximum - sum(p == provider for p in self._active_providers.values())
+                    if ready and slots > 0:
+                        pending += await crud.list_actionable_requests(
+                            exclude_ids=self._active_ids | {rid for rid, until in self._deferred.items() if until > now}
+                                | {rid for rid, until in self._retry_after.items() if until > now},
+                            limit=slots, provider=provider)
+                slots_available = len(pending)
 
                 pending_count = len(pending)
                 await event_bus.emit("worker_tick", {
@@ -148,12 +157,12 @@ class WorkerController:
 
                     self._active_ids.add(rid)
                     slots_available -= 1
-                    asyncio.create_task(self._run_one(req))
+                    self._active_providers[rid] = req.get('provider', 'flow')
+                    self._tasks[rid] = asyncio.create_task(self._run_one(req))
 
                 # Prune stale deferred/retry entries for requests no longer pending
-                pending_ids = {r["id"] for r in pending}
-                self._deferred = {k: v for k, v in self._deferred.items() if k in pending_ids}
-                self._retry_after = {k: v for k, v in self._retry_after.items() if k in pending_ids}
+                self._deferred = {k: v for k, v in self._deferred.items() if v > now}
+                self._retry_after = {k: v for k, v in self._retry_after.items() if v > now}
 
             except Exception as e:
                 logger.exception("Worker loop error: %s", e)
@@ -162,14 +171,28 @@ class WorkerController:
 
     async def _run_one(self, req: dict):
         rid = req["id"]
+        limiter = self._muse_limiter if req.get('provider') == 'muse2api' else self._rate_limiter
         try:
-            await self._rate_limiter.acquire()
+            await limiter.acquire()
             try:
                 await _process_one(req, self._deferred, self._retry_after)
             finally:
-                self._rate_limiter.release()
+                limiter.release()
         finally:
             self._active_ids.discard(rid)
+            self._active_providers.pop(rid, None)
+            self._tasks.pop(rid, None)
+
+    async def cancel_muse(self, rid):
+        req = await crud.get_request(rid)
+        if not req or req.get('provider') != 'muse2api' or req['status'] not in {'PENDING', 'PROCESSING'}:
+            return
+        await crud.update_request(rid, status='FAILED', error_message='Đã dừng chờ Muse. Tác vụ đã gửi có thể vẫn chạy ở gateway; tiếp tục sẽ lấy lại mã tác vụ.')
+        task = self._tasks.get(rid)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
 
 
 async def _prerequisites_met(req: dict, orientation: str) -> bool:
@@ -231,6 +254,12 @@ async def _resolve_orientation(req: dict) -> str:
 
 async def _process_one(req: dict, deferred: dict = None, retry_after: dict = None):
     rid, req_type = req["id"], req["type"]
+    if req.get('scene_id') and req.get('video_id'):
+        from agent.services.content_production import paused_video
+        if paused_video(req['video_id']):
+            if deferred is not None:
+                deferred[rid] = time.time() + 10
+            return  # Keep completed/in-flight results; do not submit more paused scenes.
     orientation = await _resolve_orientation(req)
 
     if await _is_already_completed(req, orientation):
@@ -307,6 +336,9 @@ async def _process_one(req: dict, deferred: dict = None, retry_after: dict = Non
 
 async def _dispatch(req: dict, orientation: str) -> dict:
     """Route request to the appropriate OperationService method."""
+    if req.get('provider') == 'muse2api':
+        from agent.services.muse_media import dispatch
+        return await dispatch(req, orientation)
     from agent.sdk.services.operations import get_operations
     ops = get_operations()
     req_type, rid = req["type"], req["id"]
@@ -352,6 +384,8 @@ async def _dispatch(req: dict, orientation: str) -> dict:
             project = await crud.get_project(pid) if pid != "0" else None
             tier = project.get("user_paygate_tier", "PAYGATE_TIER_ONE") if project else "PAYGATE_TIER_ONE"
             aspect = "IMAGE_ASPECT_RATIO_LANDSCAPE" if char.get("entity_type") in ("location",) else "IMAGE_ASPECT_RATIO_PORTRAIT"
+            from agent.services.muse_media import flow_id
+            src = await flow_id(src, pid)
             return await ops._client.edit_image(
                 prompt=edit_prompt, source_media_id=src,
                 project_id=pid, aspect_ratio=aspect,
@@ -452,6 +486,11 @@ async def _handle_failure(rid: str, req: dict, result: dict, retry_after: dict =
     if isinstance(error_msg, dict):
         error_msg = json.dumps(error_msg)[:200]
 
+    if req.get('provider') == 'muse2api':
+        await crud.update_request(rid, status='FAILED', error_message=str(error_msg))
+        await _mark_scene_failed(req)
+        return
+
     # Auto-recover expired media by re-uploading
     if "not found" in str(error_msg).lower():
         recovered = await _recover_entity_not_found(req)
@@ -470,9 +509,9 @@ async def _handle_failure(rid: str, req: dict, result: dict, retry_after: dict =
         await _mark_scene_failed(req)
         return
 
-    # Missing capabilities, projects or model permissions need a configuration
-    # change. Repeating the same request cannot resolve them.
-    if any(reason in error_lower for reason in ("unsupported_on_batch_api", "no_flow_project", "model_access_denied")):
+    # Configuration and anti-abuse rejections need user action. Handle these
+    # before the generic CAPTCHA branch to avoid repeating blocked submissions.
+    if any(reason in error_lower for reason in ("unsupported_on_batch_api", "no_flow_project", "model_access_denied", "public_error_unusual_activity")):
         await crud.update_request(rid, status="FAILED", error_message=str(error_msg))
         await _mark_scene_failed(req)
         logger.error("Request %s FAILED (not retryable): %s", rid[:8], error_msg)

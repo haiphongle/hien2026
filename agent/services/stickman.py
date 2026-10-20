@@ -25,7 +25,7 @@ from agent.utils.slugify import slugify
 
 _reference_lock = asyncio.Lock()
 SETTINGS = ('style', 'orientation', 'language', 'character_id', 'engine', 'preset_id', 'speed',
-            'music_filename', 'music_gain', 'motion', 'dialogue', 'second_preset_id', 'second_character_id', 'speech_check', 'video_model', 'style_profile_id', 'preview_first', 'preview_all', 'characters', 'story_assets', 'visual_locks', 'analysis')
+            'music_filename', 'music_gain', 'motion', 'image_effect', 'keep_completed_clips', 'dialogue', 'second_preset_id', 'second_character_id', 'speech_check', 'video_model', 'image_provider', 'video_provider', 'style_profile_id', 'preview_first', 'preview_all', 'characters', 'story_assets', 'visual_locks', 'analysis', 'background')
 
 
 def digest(value):
@@ -113,7 +113,8 @@ def srt_cues(source):
 
 async def plan(body: PlanRequest, pid=None):
     from agent.services import stickman_direction as direction
-    context, images = await direction.planning_context(pid, body) if pid else ({'visual_style': story_material(body.style)['style_instruction'], 'orientation': body.orientation}, ())
+    context, images = await direction.planning_context(pid, body) if pid else ({'visual_style': story_material(body.style)['style_instruction'], 'orientation': body.orientation,
+        'background':body.background.model_dump(mode='json') if body.background else None}, ())
     is_srt = '-->' in body.source
     source, visual_notes = srt_input(body.source) if is_srt else (clean_source(body.source), None)
     cast_requirements = direction.story_cast(source, body)
@@ -129,11 +130,20 @@ async def plan(body: PlanRequest, pid=None):
         'Return only the requested JSON. No tools, web access, invented facts, named quotes or statistics. '
         'Use a hook, concrete visual examples, an insight and a gentle takeaway. '
         'First read the ENTIRE source as ONE story. Return analysis: summary, environment, era and continuity. '
+        'Infer the story world automatically from the entire source when background is null; no user-supplied image is required. '
+        'If a background guide is supplied, use its location, architecture and atmosphere as a coherent world guide. '
+        'Explicit places, relationships and era in the source take priority; do not force every scene into the same location. '
+        'Only describe unseen rooms or viewpoints as proposed design choices, not facts observed in a reference photo. '
+        'In analysis.environment describe the common setting; assign scene.environment and recurring location assets to the correct shots. '
+        'Create a reusable location asset only when its identity needs to stay stable across multiple shots. '
         'The summary explains the narrative and emotional progression, without character appearance or new facts. '
         'Identify recurring participants and their relationships before designing individual shots. '
         'Do not let a previous character bible or a selected reference rewrite explicit roles in the new source. '
-        'Each action describes one clear drawable moment: put down a heavy sack, pull a box in opposite directions, '
-        'sit under a tree. Action only: no character appearance, style, dialogue, captions or typography. '
+        'Each action describes one clear drawable moment that directly illustrates its assigned narration. '
+        'Choose visible behavior, interactions and relevant objects that explain this specific passage. '
+        'Use concrete everyday actions before symbolic substitutes. Do not default to sacks, boxes, scales or trophies for abstract ideas. '
+        'Use a metaphor only when its connection to the assigned words is immediately understandable. '
+        'Action only: no character appearance, style, dialogue, captions or typography. '
         'Identify up to six recurring participants as Character A through F, only as many as the story needs. '
         'Keep the narrator OFFSCREEN unless the source explicitly makes them a visible participant. '
         'Generic friends, passersby or crowds belong in extras, not in recurring character portraits. '
@@ -142,6 +152,8 @@ async def plan(body: PlanRequest, pid=None):
         'Use their relevant visual ideas; omit style, character appearance, dialogue and typography from actions. '
         'For numbered SRT cues, group consecutive cues by meaning: keep a sentence or thought together, '
         'make each numbered lesson its own scene where practical, with a separate opening and closing. '
+        'Start a new group when the visible action, participant relationship or emotional beat changes. '
+        'A scene must not cover several distinct ideas with one generic pose or object. '
         f'Choose 1–{planning_limit} thematic scene groups; do not make one group per cue or pad the count. '
         'Return cue_start and cue_end (inclusive, one-based) for each scene instead of narration. '
         'Cover every cue exactly once, in order, without gaps or overlaps. '
@@ -164,11 +176,15 @@ async def plan(body: PlanRequest, pid=None):
         'Follow cast_requirements when supplied; references retain their identity but must fit the assigned story roles. '
         'Style reference images guide drawing technique only, never the story cast, gender or relationships. '
         'Use Character A through F in actions and motion_beats, never their appearance. '
+        'Spell out actor labels as Character A, Character B, etc. in each action and motion beat. '
+        'Every named actor or reusable asset must be assigned to that shot; do not refer to an offscreen actor as visible. '
         'Visual cast is independent of speaker: a single narrator may describe two people interacting. '
         'Return cast for each scene as a list of only the recurring people actually visible, or [] when none. '
         'Do not put every main character in every scene. Reuse roles without creating duplicates. '
         'Set shot_kind to story, environment (no people), detail (object close-up, no people), or metaphor. '
-        'Alternate relevant human action with establishing views, object details and concrete visual metaphors when the source supports it. '
+        'Use establishing views and object details only when they carry the meaning of that passage. '
+        'Keep the relevant people visible when the words concern their feelings, responsibilities or interaction; '
+        'a decorative object close-up must not replace an important emotional beat. '
         'Do not force talking heads, two people, a crowd, or a cutaway into every story. '
         'Use extras to describe background people only when useful; keep empty for shots without them. '
         'For recurring locations or distinctive objects whose identity matters across multiple scenes, return story_assets: '
@@ -179,11 +195,15 @@ async def plan(body: PlanRequest, pid=None):
         'Design varied settings, meaningful objects and wide/medium/close-up shots. Avoid repeated talking-head tableaux. '
         'Every shot must include environment (place and time), staging (positions and relevant props), lighting, '
         'and continuity (matching prior shot props, screen direction and emotional state). '
+        'Specify who does what to whom, which hands touch which object, where each participant stands, '
+        'and observable emotion through posture, gaze or a reaction. Keep a single clear focal point. '
         'These fields describe visible staging only, never character appearance, costume or text. '
         'With a plain background, stage meaningful action props without inventing scenery. '
         'Each scene needs three distinct motion_beats (start, develop, resolve) plus a camera direction. '
         'The first action is the image starting pose; later beats must develop from it coherently within eight seconds. '
         'Keep ordinary gestures physically simple. No dialogue inside motion_beats; narration is produced separately. '
+        'Before returning, check each group against its exact source cues: action matches meaning, cast matches roles, '
+        'props have a clear purpose, emotion is visible, and the three beats follow from the starting image. '
         'Prefer roughly 15–28 words per scene; long thoughts need multiple visual shots. Preserve all SRT words. '
         + json.dumps({'language': body.language, 'scene_count': count,
                       'dialogue': body.dialogue,
@@ -202,7 +222,8 @@ async def plan(body: PlanRequest, pid=None):
     scene_schema = schema['$defs']['SRTScene' if is_srt else 'StoryScene']
     scene_schema['required'] = list(dict.fromkeys(scene_schema.get('required', []) +
         ['cast', 'shot_kind', 'extras', 'assets', 'motion_beats', 'camera', 'environment', 'staging', 'lighting', 'continuity']))
-    parsed = contract.model_validate(ai_tasks.parse_json(await ai_tasks.complete(resolve_role('prompt_suggestion'), prompt, schema=schema, **({'images': images} if images else {}))))
+    parsed = await ai_tasks.complete_structured(resolve_role('prompt_suggestion', body.text_provider), prompt,
+                                               contract=contract, schema=schema, images=images)
     if len(parsed.scenes) > planning_limit or count is not None and len(parsed.scenes) != count:
         raise ValueError('AI trả sai số cảnh. Chưa áp dụng kịch bản; thử lại.')
     if cues:
@@ -235,7 +256,7 @@ async def plan(body: PlanRequest, pid=None):
         ref = next((r for r in context.get('references', []) if r['role'] == design.role), None)
         if ref:
             direction.check_reference(design, ref)
-    return direction.fit_shots(result) if body.auto_timing else result
+    return direction.fit_shots(result) if body.auto_timing and not cues else result
 
 
 def validate_music(body, project):
@@ -251,6 +272,8 @@ def validate_music(body, project):
 async def validate(body, project):
     from agent.services import stickman_direction as direction
     direction.material(body, project['id'])
+    if body.motion != 'talk':
+        direction.validate_shots(body)
     if body.style_profile_id and direction.profile(project['id'], body.style_profile_id).get('status') == 'DRAFT':
         raise ValueError('Duyệt nhân vật và cảnh mẫu rồi lưu phong cách vào thư viện trước khi tạo video.')
     if body.style_profile_id and body.motion == 'talk':
@@ -310,44 +333,58 @@ async def reference(project, body, speaker='A'):
         return character
 
 
-async def generate_images(vid, pid, ids, kind, orientation, update, begin, span, on_completed=None, *, video_model=None):
+async def generate_images(vid, pid, ids, kind, orientation, update, begin, span, on_completed=None, *, video_model=None, provider='flow'):
     from agent.api.requests import BatchRequestCreate, batch_status, create_batch
     field = 'character_id' if 'CHARACTER' in kind else 'scene_id'
-    queued = await create_batch(BatchRequestCreate(requests=[dict(type=kind, project_id=pid, video_id=vid,
+    queued = await create_batch(BatchRequestCreate(requests=[dict(type=kind, project_id=pid, video_id=vid, provider=provider,
                                                                orientation=orientation, **{field: key},
                                                                **({'video_model': video_model} if video_model else {})) for key in ids]))
     wanted = {r['id'] for r in queued}
     acknowledged = set()
-    deadline = time.monotonic() + 1800
-    while time.monotonic() < deadline:
-        status = await batch_status(video_id=vid, type=kind, orientation=orientation)
-        rows = [r for r in await crud.list_requests(video_id=vid) if r['id'] in wanted]
-        for row in rows:
-            if row['status'] == 'COMPLETED' and row['id'] not in acknowledged:
-                if on_completed:
-                    await on_completed(row)
-                acknowledged.add(row['id'])
-        done = sum(r['status'] in {'COMPLETED', 'FAILED'} for r in rows)
-        completed = sum(r['status'] == 'COMPLETED' for r in rows)
-        failed = sum(r['status'] == 'FAILED' for r in rows)
-        label = 'Clip hoạt hình' if 'VIDEO' in kind else 'Ảnh tham chiếu' if field == 'character_id' else 'Ảnh cảnh'
-        update(progress=begin + round(span*done/len(wanted)), stage=f"{label} · {completed}/{len(wanted)}" + (f' · {failed} lỗi' if failed else ''))
-        if done == len(wanted):
-            failures = [r for r in rows if r['status'] != 'COMPLETED']
-            if failures:
-                if any('model_access_denied' in (r.get('error_message') or '').lower() for r in failures):
-                    if 'VIDEO' in kind:
-                        update(error_code='VIDEO_MODEL_ACCESS_DENIED')
-                        raise ValueError('Google Flow từ chối quyền dùng model video. Chọn model thay thế bên dưới rồi bấm tiếp tục. Ảnh, giọng và clip hoàn tất vẫn được giữ lại.')
-                    raise ValueError('Google Flow từ chối model ảnh. Kiểm tra model ảnh trong Cài đặt rồi thử lại.')
-                if 'VIDEO' in kind and 'polling timeout' in (failures[0].get('error_message') or '').lower():
-                    raise ValueError('Google Flow chưa trả được clip trong thời gian chờ. Thử lại phần còn thiếu hoặc chọn model khác; các clip đã xong vẫn được giữ.')
-                raise ValueError(f"{label} lỗi: {failures[0].get('error_message') or 'Google Flow chưa trả tư liệu'}. Bấm tiếp tục để thử lại phần còn thiếu.")
-            return
-        if status.done and not rows:
-            raise ValueError('Không tìm thấy yêu cầu tạo ảnh. Bấm tiếp tục để thử lại.')
-        await asyncio.sleep(3)
-    raise TimeoutError('Chờ tạo ảnh quá 30 phút. Mở Google Flow, kiểm tra extension rồi bấm tiếp tục.')
+    timeout = 1800
+    if provider == 'muse2api':
+        from agent.services.muse_settings import load as muse_config
+        timeout = max(timeout, len(wanted) * (muse_config().timeout_seconds + 120))
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            status = await batch_status(video_id=vid, type=kind, orientation=orientation)
+            rows = [r for r in await crud.list_requests(video_id=vid) if r['id'] in wanted]
+            for row in rows:
+                if row['status'] == 'COMPLETED' and row['id'] not in acknowledged:
+                    if on_completed:
+                        await on_completed(row)
+                    acknowledged.add(row['id'])
+            done = sum(r['status'] in {'COMPLETED', 'FAILED'} for r in rows)
+            completed = sum(r['status'] == 'COMPLETED' for r in rows)
+            failed = sum(r['status'] == 'FAILED' for r in rows)
+            label = 'Clip hoạt hình' if 'VIDEO' in kind else 'Ảnh tham chiếu' if field == 'character_id' else 'Ảnh cảnh'
+            update(progress=begin + round(span*done/len(wanted)), stage=f"{label} · {completed}/{len(wanted)}" + (f' · {failed} lỗi' if failed else ''))
+            if done == len(wanted):
+                failures = [r for r in rows if r['status'] != 'COMPLETED']
+                if failures:
+                    if provider == 'flow' and any('public_error_unusual_activity' in (r.get('error_message') or '').lower() for r in failures):
+                        raise ValueError(f'{label}: Google Flow từ chối yêu cầu vì phát hiện hoạt động bất thường (PUBLIC_ERROR_UNUSUAL_ACTIVITY). Đã dừng tự thử lại. Mở Google Flow để kiểm tra phiên đăng nhập và thông báo xác minh; chỉ tiếp tục sau khi đã xử lý. Đổi model không giải quyết lỗi này. Phần đã hoàn tất được giữ lại.')
+                    if provider == 'flow' and any('model_access_denied' in (r.get('error_message') or '').lower() for r in failures):
+                        if 'VIDEO' in kind:
+                            update(error_code='VIDEO_MODEL_ACCESS_DENIED')
+                            raise ValueError('Google Flow từ chối quyền dùng model video. Chọn model thay thế bên dưới rồi bấm tiếp tục. Ảnh, giọng và clip hoàn tất vẫn được giữ lại.')
+                        raise ValueError('Google Flow từ chối model ảnh. Kiểm tra model ảnh trong Cài đặt rồi thử lại.')
+                    if 'VIDEO' in kind and 'polling timeout' in (failures[0].get('error_message') or '').lower():
+                        raise ValueError('Google Flow chưa trả được clip trong thời gian chờ. Thử lại phần còn thiếu hoặc chọn model khác; các clip đã xong vẫn được giữ.')
+                    raise ValueError(f"{label} lỗi: {failures[0].get('error_message') or 'Nhà cung cấp chưa trả tư liệu'}. Bấm tiếp tục để thử lại phần còn thiếu.")
+                return
+            if status.done and not rows:
+                raise ValueError('Không tìm thấy yêu cầu tạo ảnh. Bấm tiếp tục để thử lại.')
+            await asyncio.sleep(3)
+        raise TimeoutError('Chờ Muse quá thời hạn. Kiểm tra gateway rồi tiếp tục phần còn thiếu.' if provider == 'muse2api' else 'Chờ tạo ảnh quá 30 phút. Mở Google Flow, kiểm tra extension rồi bấm tiếp tục.')
+    except (asyncio.CancelledError, TimeoutError):
+        if provider == 'muse2api':
+            from agent.worker.processor import get_worker_controller
+            for rid in wanted:
+                await get_worker_controller().cancel_muse(rid)
+        raise
+
 
 
 async def image_file(vid, media_id):
@@ -379,7 +416,7 @@ def check_image(path):
         image.load()
 
 
-async def image_clip(image, target, duration, orientation, motion='zoom'):
+async def image_clip(image, target, duration, orientation, motion='zoom', *, effect=None, index=0):
     width, height = (720, 1280) if orientation == 'VERTICAL' else (1280, 720)
     frames = math.ceil(duration*30-1e-6)
     # Quantized length includes the whole voice; center zoom only, at most 5%.
@@ -387,6 +424,9 @@ async def image_clip(image, target, duration, orientation, motion='zoom'):
     x = f'(iw-iw/zoom)*on/{max(1, frames-1)}' if motion == 'pan' else 'iw/2-iw/zoom/2'
     graph = (f'scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},'
              f"zoompan=z='{zoom}':x='{x}':y='ih/2-ih/zoom/2':d={frames}:s={width}x{height}:fps=30,format=yuv420p")
+    if effect is not None:
+        from agent.services.image_effects import filter_graph
+        graph = filter_graph(effect, index, frames, width, height)
     temporary = target.with_name(f'.{target.stem}.rendering.mp4')
     try:
         await media_jobs.process(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-i', str(image), '-vf', graph,
@@ -420,12 +460,26 @@ async def build_timeline(vid, body, project, scenes, voices, lengths, paths=None
     tracks = [Track(id=uuid.uuid4(), name=name, kind=kind, role=role) for name, kind, role in
               [('Hình ảnh', 'video', 'original'), ('Giọng đọc', 'audio', 'voice'), ('Phụ đề', 'caption', 'original'), ('Nhạc nền', 'audio', 'music')]]
     clips, cursor = [], 0
+    renders = speech_store.read_json(directory(vid)/'renders.json', {})
     for index, (scene, voice, length) in enumerate(zip(scenes, voices, lengths)):
         path = Path(paths[index]) if paths else directory(vid)/f"{scene['id']}.mp4"
+        from agent.services import image_effects
+        settings = renders.get(scene['id'], {}).get('settings', {})
+        effect = None
+        if settings.get('motion') == 'effects':
+            prefix = 'vertical' if body.orientation == 'VERTICAL' else 'horizontal'
+            path = await image_file(vid, scene[f'{prefix}_image_media_id'])
+            effect = image_effects.selected(body, body.scenes[index]).model_copy(update={
+                'movement': image_effects.camera(image_effects.selected(body, body.scenes[index]), index)['movement']})
         picture = await timeline.register(vid, vid, f"stickman:{scene['id']}:{path.stem}", f"Cảnh {scene['display_order']}", path, 'source')
         audio = await timeline.register(vid, vid, f"voice:{scene['id']}", scene['narrator_text'][:60], Path(voice['audio_path']), 'voice')
         picture_id = uuid.uuid4()
-        clips.append(Clip(id=picture_id, track_id=tracks[0].id, asset_id=picture['id'], start=cursor, duration=length))
+        transition = None
+        if body.motion in {'effects', 'mixed'} and index:
+            from agent.services import image_effects
+            transition = image_effects.PRESETS[image_effects.selected(body, body.scenes[index]).preset]['transition']
+        clips.append(Clip(id=picture_id, track_id=tracks[0].id, asset_id=picture['id'], start=cursor, duration=length,
+                          transition=transition, image_effect=effect, image_span=length if effect else None))
         clips.append(Clip(id=uuid.uuid4(), track_id=tracks[1].id, asset_id=audio['id'], start=cursor,
                           duration=math.floor(audio['duration']*30+1e-6)/30, anchor=picture_id, origin=f"voice:{picture_id}:{scene['id']}"))
         for part, (offset, span, text) in enumerate(caption_parts(scene['narrator_text'], float(voice['duration']))):
@@ -528,7 +582,8 @@ async def generate_voices(vid, body, project, scenes, update):
 
 def start(vid, body, project, *, model_notice=None):
     from agent.services.stickman_models import selected
-    if body.motion == 'ai':
+    from agent.services.image_effects import uses_ai
+    if uses_ai(body) and body.video_provider == 'flow':
         body = body.model_copy(update={'video_model': selected(body, project)})
     async def run(update):
         try:
@@ -560,7 +615,7 @@ def start(vid, body, project, *, model_notice=None):
             if body.speech_check:
                 from agent.services.stickman_production import speech_review
                 await speech_review(vid, body, scenes, voices, update)
-            if body.motion == 'ai':
+            if uses_ai(body):
                 from agent.services.stickman_production import visual_review
                 await visual_review(vid, project['id'], body, scenes, update)
             async with video_export_lock:
@@ -582,6 +637,9 @@ def start(vid, body, project, *, model_notice=None):
             previous = speech_store.read_json(directory(vid)/'result.json', {})
             await crud.update_video(vid, status='COMPLETED' if previous.get('status') == 'COMPLETED' else 'FAILED')
             raise
+    (media_jobs.directory(vid)/'production-pause.json').unlink(missing_ok=True)
     return media_jobs.start(vid, 'stickman', run, metadata={
-        'video_model': body.video_model if body.motion == 'ai' else None, 'model_notice': model_notice,
+        'motion': body.motion,
+        'video_model': body.video_model if uses_ai(body) and body.video_provider == 'flow' else ('Muse' if uses_ai(body) else None), 'model_notice': model_notice,
+        'image_provider': body.image_provider, 'video_provider': body.video_provider,
     })

@@ -1,6 +1,16 @@
-"""Shared pytest fixtures for Flow Kit tests."""
+"""Shared pytest fixtures for FrameWeaver tests."""
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_model_locations(tmp_path, monkeypatch):
+    """Tests must never read or change the user's saved model locations."""
+    from agent.services import model_storage
+    monkeypatch.setattr(model_storage, 'CONFIG', tmp_path/'model-storage.json')
+    from agent.services import storage_locations
+    monkeypatch.setattr(storage_locations, 'CONFIG', tmp_path/'storage-locations.json')
+    monkeypatch.setattr(storage_locations, 'JOB', tmp_path/'storage-job.json')
 
 
 @pytest.fixture
