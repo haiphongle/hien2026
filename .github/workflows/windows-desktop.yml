@@ -29,7 +29,8 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '24'
-      - uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca
+      - uses: actions/cache/restore@3edfce9056124e459a23f683a21433670d47daca
+        id: runtime-cache
         with:
           path: desktop/.cache/windows
           key: windows-x64-v1-${{ hashFiles('desktop/windows-lock.json', 'desktop/runtime-lock.json', 'desktop/media-build.py', 'desktop/media-windows.sh', 'desktop/requirements-macos.lock') }}
@@ -54,7 +55,14 @@ jobs:
       - name: Build static FFmpeg and x264 from pinned sources
         if: steps.media.outputs.cached != 'true'
         shell: msys2 {0}
-        run: bash desktop/media-windows.sh
+        run: |
+          set -o pipefail
+          bash desktop/media-windows.sh 2>&1 | tee desktop/.cache/windows/media-build.log
+      - uses: actions/cache/save@3edfce9056124e459a23f683a21433670d47daca
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        with:
+          path: desktop/.cache/windows
+          key: windows-x64-v1-${{ hashFiles('desktop/windows-lock.json', 'desktop/runtime-lock.json', 'desktop/media-build.py', 'desktop/media-windows.sh', 'desktop/requirements-macos.lock') }}
       - name: Assemble isolated Windows runtime
         run: python desktop/build-windows.py --web-dir desktop/web
       - name: Create NSIS installer
