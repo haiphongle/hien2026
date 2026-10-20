@@ -16,27 +16,27 @@ giọng nói, lời đọc, phụ đề và lịch sử bản xuất. Dự án h
 
 ## Bản ứng dụng macOS beta
 
-**[Tải FrameWeaver 1.3.1 beta 3 cho Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.3)**
+**[Tải FrameWeaver 1.3.1 beta 4 cho Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.4)**
 — macOS 13 trở lên. Chọn bộ cài theo loại máy:
 
 | Máy Mac | Bộ cài | Dung lượng |
 | --- | --- | --- |
-| Apple Silicon (M1 trở lên) | [DMG arm64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.3/FrameWeaver-1.3.1-beta.3-macOS-arm64.dmg) | 240 MB |
-| Intel | [DMG x64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.3/FrameWeaver-1.3.1-beta.3-macOS-x64.dmg) | 253 MB |
+| Apple Silicon (M1 trở lên) | [DMG arm64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.4/FrameWeaver-1.3.1-beta.4-macOS-arm64.dmg) | 239 MB |
+| Intel | [DMG x64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.4/FrameWeaver-1.3.1-beta.4-macOS-x64.dmg) | 255 MB |
 
 Cả hai DMG đã ký Developer ID, được Apple notarize và gắn ticket. Mở DMG rồi kéo
 FrameWeaver vào Applications; ứng dụng có sẵn Python và FFmpeg. Model AI tùy chọn
 và tài khoản nhà cung cấp được cài/kết nối riêng.
 
-Để dùng Google Flow, tải **[ZIP extension Chrome 0.3.6 (~381 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.3/FrameWeaver-1.3.1-beta.3-extension.zip)**
+Để dùng Google Flow, tải **[ZIP extension Chrome 0.3.6 (~379 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.4/FrameWeaver-1.3.1-beta.4-extension.zip)**
 dùng chung cho Intel và M1. Giải nén → mở `chrome://extensions` → bật **Developer mode**
 → **Load unpacked** → chọn thư mục `extension` vừa giải nén. Hoặc lấy extension qua
 menu **Ứng dụng → Cài extension Google Flow…** trong ứng dụng.
 
 Hai bộ cài đóng gói ứng dụng ngày **20/10/2026**, có **cài thành phần ChatGPT bằng một nút**,
 **Tải lại giao diện**, **trạng thái extension cập nhật ngay**, **Kiểm tra kết nối
-Google Flow** và **tích hợp Muse**. Xem [hướng dẫn beta 3](docs/releases/v1.3.1-beta.3-macos.md)
-để biết cách cài và phạm vi kiểm thử. [Beta 2](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)
+Google Flow** và **cài/tự khởi động gateway Muse**. Xem [hướng dẫn beta 4](docs/releases/v1.3.1-beta.4-macos.md)
+để biết cách cài và phạm vi kiểm thử. [Beta 3](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.3), [beta 2](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)
 và beta 1 vẫn được giữ nguyên. Bản Intel kiểm thử qua Rosetta, chưa thử trên máy Intel thật.
 
 ### Kết nối ChatGPT không cần Terminal
@@ -53,12 +53,12 @@ ngay sau khi kiểm tra và tự làm mới khi mất/kết nối lại.
 ### Muse AI trong cả hai bản Mac
 
 Muse có thể **lên kịch bản, tạo ảnh tham chiếu/ảnh cảnh và tạo video từ ảnh đầu**.
-Vào **Cài đặt → Muse**, kết nối [gateway muse2api](https://github.com/crisng95/muse2api)
-đã cài riêng, lưu URL/khóa gateway và kiểm tra kết nối. Sau đó chọn Muse cho từng
-công đoạn trong Studio. Ứng dụng có sẵn phần tích hợp và launcher tùy chọn;
-gateway, Chrome và tài khoản Muse cần thiết lập riêng. Tạo bằng Muse đi qua
-gateway riêng; Google Flow vẫn cần extension. Màn hình tạo dự án mới của beta
-này vẫn yêu cầu kết nối Flow sẵn sàng.
+Vào **Cài đặt → Muse → Cài và khởi động Muse** để tải gateway tùy chọn.
+Ứng dụng tự lưu khóa và có thể tự mở gateway đã cài ở các lần chạy sau. Có trạng
+thái, hủy, khởi động lại/dừng và nhật ký ngay trong Cài đặt; luồng thường không
+cần Terminal hay dashboard. Cài Chrome và kết nối phiên Muse một lần trong app,
+rồi chọn Muse cho từng công đoạn Studio. Google Flow vẫn cần extension; màn hình
+tạo dự án mới trong beta này vẫn yêu cầu kết nối Flow.
 
 Xem **[hướng dẫn Muse tiếng Việt](docs/MUSE.vi.md)**. Tên model có thể chỉ là
 alias của gateway; số token văn bản không xác nhận quyền/hạn mức tạo ảnh, video.
@@ -66,7 +66,7 @@ Giọng đọc tiếp tục dùng các nhà cung cấp TTS hiện có.
 
 **Source và desktop:** source preview trên repository và các gói “Source code”
 tự động của GitHub tách biệt với ứng dụng desktop. Phần cài bằng lệnh bên dưới
-dành cho source preview; hướng dẫn Muse phía trên áp dụng cho **desktop beta 3**.
+dành cho source preview; hướng dẫn Muse phía trên áp dụng cho **desktop beta 4**.
 Lần cập nhật tài liệu này chưa đưa code Muse hoặc trình cài ChatGPT của desktop vào source preview.
 
 ## Từ ý tưởng đến video của bạn
@@ -99,7 +99,7 @@ Xem ảnh lớn trong [bộ sưu tập demo và giao diện](docs/SHOWCASE.md).
 ## Chức năng
 
 - Quản lý dự án, nhân vật, ảnh tham chiếu, prompt và hàng chờ tạo ảnh/video.
-- Muse AI trong desktop beta 3: lên kịch bản, tạo ảnh và video từ ảnh qua gateway muse2api tùy chọn.
+- Muse AI trong desktop beta 4: lên kịch bản, tạo ảnh và video từ ảnh qua gateway muse2api tùy chọn.
 - Kết nối Google Flow qua Chrome extension và phiên đăng nhập của chính bạn.
 - Chọn phong cách minh họa, người que và nhân vật 2D; lưu yêu thích, thêm ảnh mẫu và dùng lại mẫu sản xuất.
 - Soạn lời đọc, sửa SRT, chọn giọng và dùng các bộ máy TTS cục bộ tùy chọn.
@@ -135,7 +135,7 @@ phong cách từ ảnh tham chiếu của bạn.
 <details>
   <summary><strong>Mở ảnh dashboard và hướng dẫn kết nối</strong></summary>
   <p><img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="Dashboard FrameWeaver và hướng dẫn cài đặt, kết nối extension" /></p>
-  <p>Ảnh cũ minh họa <strong>FrameWeaver 0.3.5</strong>; beta 3 đi kèm extension <strong>0.3.6</strong>. Xem thêm <a href="docs/images/frameweaver_extension.jpg">ảnh giao diện extension</a>.</p>
+  <p>Ảnh cũ minh họa <strong>FrameWeaver 0.3.5</strong>; beta 4 đi kèm extension <strong>0.3.6</strong>. Xem thêm <a href="docs/images/frameweaver_extension.jpg">ảnh giao diện extension</a>.</p>
 </details>
 
 ## Cài đặt nhanh
@@ -224,8 +224,8 @@ Bản preview chưa được tuyên bố vượt qua toàn bộ kiểm thử tr�
 
 ## Tài liệu và đóng góp
 
-- [Kết nối ChatGPT trong desktop beta 3](docs/CHATGPT-DESKTOP.vi.md)
-- [Muse AI trong desktop beta 3](docs/MUSE.vi.md)
+- [Kết nối ChatGPT trong desktop beta 4](docs/CHATGPT-DESKTOP.vi.md)
+- [Muse AI trong desktop beta 4](docs/MUSE.vi.md)
 - [Hướng dẫn chia sẻ và môi trường](docs/SHARING.md)
 - [Bộ sưu tập demo và giao diện](docs/SHOWCASE.md)
 - [Tài liệu kỹ thuật tham khảo](docs/REFERENCE.md)

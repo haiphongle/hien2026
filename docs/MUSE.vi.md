@@ -1,51 +1,55 @@
-# Muse AI · desktop beta 3
+# Muse AI · desktop beta 4
 
-[English](MUSE.md) · [Tải bản macOS](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.3)
+[English](MUSE.md) · [Tải bản macOS](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.4)
 
-Cả **Apple Silicon và Intel** beta 3 đều tích hợp Muse để lên kịch bản, tạo ảnh
+Cả **Apple Silicon và Intel** beta 4 đều tích hợp Muse để lên kịch bản, tạo ảnh
 tham chiếu/ảnh cảnh và tạo video từ ảnh đầu. Hướng dẫn này dành cho **ứng dụng
 desktop đã đóng gói**, tách biệt với source preview cũ trên repository.
 
 Muse kết nối qua [gateway cộng đồng muse2api](https://github.com/crisng95/muse2api).
-Gateway, Chrome và tài khoản Muse được cài/kết nối riêng. Chỉ đăng nhập muse.ai
+Gateway cài qua giao diện; Chrome và tài khoản Muse vẫn cần thiết lập riêng. Chỉ đăng nhập muse.ai
 trong trình duyệt chưa tự kết nối FrameWeaver; URL website không phải URL gateway.
 
-## 1. Khởi động gateway trên máy
+## 1. Cài và khởi động trong Cài đặt
 
-Cài Chrome và đặt FrameWeaver trong `/Applications`. Ứng dụng có launcher tùy
-chọn để tải gateway vào một môi trường Python riêng. Mở Terminal và chạy:
+1. Cài Chrome và đặt FrameWeaver trong `/Applications`.
+2. Vào **Cài đặt → Muse → Cài và khởi động Muse**. Lần đầu cần mạng và ít nhất
+   512 MB trống. Ứng dụng dùng Python đi kèm để cài gateway trong môi trường riêng,
+   mở hồ sơ Chrome riêng và tự lưu khóa. Không cần Node.js, Terminal hay nhập admin key.
+3. Giữ **Tự khởi động gateway đã cài** để tự mở ở lần chạy app sau khi bật Muse.
+   Người đã có gateway tự chọn bật; chỉ mở app không tự tải thành phần. Nút cài mới
+   bật tùy chọn tự khởi động.
+4. Kết nối phiên tài khoản bên dưới. **Gateway Muse đã chạy** chỉ xác nhận dịch vụ
+   nội bộ, chưa xác nhận tài khoản hay quyền tạo ảnh/video.
 
-```sh
-env -u PYTHONHOME PYTHONDONTWRITEBYTECODE=1 \
-  FRAMEWEAVER_DATA_DIR="$HOME/Library/Application Support/FrameWeaver" \
-  "/Applications/FrameWeaver.app/Contents/Resources/runtime/python/bin/python3" \
-  "/Applications/FrameWeaver.app/Contents/Resources/runtime/app/scripts/muse_gateway.py" \
-  --install --background
-```
+Có tiến trình, hủy, **Khởi động Muse**, **Khởi động lại**, **Dừng gateway** và
+**Xem nhật ký**. Thoát FrameWeaver chỉ dừng gateway/trình duyệt do phiên app đó mở.
+Gateway đang chạy từ phiên khác được dùng lại và không bị dừng. Lỗi khởi động
+trình duyệt cũng được dọn để tránh giữ cổng.
 
-Lệnh dùng cho **cả hai bản Mac**, cần mạng ở lần cài đầu. Gateway được ghim tại
-revision [`efc06dd9741efe3b56a4bb02bb4761c0003eae30`](https://github.com/crisng95/muse2api/tree/efc06dd9741efe3b56a4bb02bb4761c0003eae30).
-Sau khi khởi động lại máy, chạy lại lệnh **bỏ `--install`**. Gateway chưa tự khởi
-động cùng máy. Nếu cổng 18610 đã có gateway chạy thì không mở thêm bản thứ hai.
-Nếu không tìm thấy Chrome, thêm `--chrome` và đường dẫn file thực thi Chrome.
+**Mở trang quản lý gateway** là liên kết nâng cao tùy chọn, chỉ hiện khi dịch vụ
+đã chạy. URL/khóa cho gateway tự quản nằm trong **Nâng cao**. Gateway nội bộ chỉ
+lắng nghe localhost; gateway ngoài máy phải dùng HTTPS. Nếu lỗi mở lần đầu, xem
+nhật ký rồi thử lại. Lần đầu Chrome Intel qua Rosetta trong kiểm thử bị quá thời
+hạn của gateway; thử lại thành công. Chưa kiểm thử trên máy Intel thật.
 
-Launcher dùng hồ sơ trình duyệt riêng, tự lưu khóa gateway vào cấu hình riêng
-tư của FrameWeaver, không tự đọc cookie Chrome của bạn. Môi trường, dữ liệu và
-`gateway.log` được lưu tại:
+Gói nguồn được ghim revision
+[`efc06dd9741efe3b56a4bb02bb4761c0003eae30`](https://github.com/crisng95/muse2api/tree/efc06dd9741efe3b56a4bb02bb4761c0003eae30)
+và kiểm tra SHA256. Nguồn tải, nơi lưu và nhật ký đều hiện trong Cài đặt.
+Môi trường, dữ liệu và hồ sơ trình duyệt riêng được lưu tại:
 
 ```text
 ~/Library/Application Support/FrameWeaver/.flowkit/muse-gateway/
 ```
 
-Nếu đã có gateway riêng, dùng hướng dẫn của gateway đó rồi nhập URL/khóa API
-vào FrameWeaver. Gateway nội bộ chỉ nên lắng nghe localhost; gateway ngoài máy
-phải dùng HTTPS.
+Gateway là thành phần tải tùy chọn, không có sẵn trong DMG. Không tự đọc cookie
+Chrome đang dùng. Launcher bằng lệnh cũ vẫn còn cho người tự quản nâng cao;
+không chạy thêm nếu gateway do app mở đang dùng các cổng đó.
 
 ## 2. Kết nối tài khoản trong FrameWeaver
 
-1. Vào **Cài đặt → Muse**, bật kết nối. Với launcher ở trên, URL là
-   **`http://127.0.0.1:18610`**. Lưu cấu hình; khóa đã được launcher lưu sẵn.
-   Nếu dùng gateway khác, nhập khóa API của gateway đó.
+1. Sau khi cài, Muse được bật và khóa nội bộ đã lưu sẵn. URL mặc định là
+   **`http://127.0.0.1:18610`**. Gateway tự quản nhập URL/khóa trong **Nâng cao**.
 2. Mở **Kết nối tài khoản Muse trên máy**. Trong Chrome đã đăng nhập muse.ai,
    mở **DevTools → Application → Cookies → https://muse.ai**. Sao chép cột Value
    của đúng bốn tên `hatch_sess`, `hatch_gw`, `hatch_vml`,
@@ -59,7 +63,7 @@ phải dùng HTTPS.
 Không lấy cookie Google/Gmail hoặc nhập mật khẩu Gmail. Không gửi giá trị cookie,
 khóa API lên chat, ảnh chụp, issue hay GitHub. Dashboard gateway tại
 `http://127.0.0.1:18610/dashboard` yêu cầu **khóa quản trị**, không phải mật khẩu
-Muse. Launcher đi kèm dùng cùng một giá trị riêng tư cho khóa quản trị và API;
+Muse. Gateway do app mở dùng cùng một giá trị riêng tư cho khóa quản trị và API;
 gateway khác có thể đặt hai khóa khác nhau. FrameWeaver kết nối bằng khóa API.
 Nếu gateway tự quản dùng khóa quản trị riêng, hãy nhập tài khoản trực tiếp bằng
 công cụ quản trị của gateway đó thay vì form tiện ích trong FrameWeaver.
@@ -70,7 +74,7 @@ Trong **Studio → Video người que**, chọn riêng nhà cung cấp cho nội
 và video. Có thể dùng Muse lên kịch bản rồi Google Flow tạo media, hoặc dùng
 Muse cho cả ba công đoạn được hỗ trợ. Giữ gateway chạy khi dùng Muse.
 
-| Công đoạn | Hỗ trợ trong beta 3 |
+| Công đoạn | Hỗ trợ trong beta 4 |
 | --- | --- |
 | Kịch bản | Lên cảnh từ SRT/nội dung; duyệt trước khi sản xuất |
 | Ảnh | Ảnh nhân vật/tham chiếu và ảnh cảnh; tối đa bốn ảnh tham chiếu mỗi yêu cầu |
@@ -103,7 +107,8 @@ cập hay chi phí tài khoản Muse; kiểm tra với nhà cung cấp.
 - **Hủy:** dừng chờ/hàng đợi FrameWeaver. Gateway chưa có API hủy media đã gửi;
   tác vụ phía Muse có thể vẫn chạy và tính hạn mức.
 
-Báo cáo kiểm thử desktop gồm khởi động cục bộ, kiểm tra kết nối, dựng và xuất.
+Báo cáo kiểm thử gồm khởi động, kết nối, dựng/xuất và cài mới/vòng đời gateway
+với Python đi kèm hai kiến trúc; dùng tài khoản trống, không tạo media trả phí.
 Không xác nhận tốc độ, chất lượng, hạn mức Muse thật hoặc cài gateway thành công
 trên mọi máy. Bản Intel kiểm thử qua Rosetta, chưa thử trên máy Intel thật.
 Gateway là dự án cộng đồng riêng, không phải SDK chính thức của Muse. Sử dụng
