@@ -45,6 +45,11 @@ Both DMGs are Developer ID signed, Apple notarized, and stapled. Open one and dr
 FrameWeaver into Applications; Python and FFmpeg are included. Optional AI models
 and provider accounts are configured separately.
 
+For Google Flow, download the **[Chrome extension ZIP (0.3.5, ~380 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-extension.zip)**,
+shared by both Mac editions. Extract it, open `chrome://extensions`, enable
+**Developer mode**, choose **Load unpacked**, and select the extracted `extension`
+folder. You can also get it from the app menu **Ứng dụng → Cài extension Google Flow…**.
+
 Both desktop installers keep the application snapshot packaged on **17 October
 2026**. Source documentation continues independently; use the
 [desktop release notes](docs/releases/v1.3.1-beta.1-macos.md) for its exact scope,

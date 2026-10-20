@@ -28,6 +28,11 @@ Cả hai DMG đã ký Developer ID, được Apple notarize và gắn ticket. M�
 FrameWeaver vào Applications; ứng dụng có sẵn Python và FFmpeg. Model AI tùy chọn
 và tài khoản nhà cung cấp được cài/kết nối riêng.
 
+Để dùng Google Flow, tải **[ZIP extension Chrome 0.3.5 (~380 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-extension.zip)**
+dùng chung cho Intel và M1. Giải nén → mở `chrome://extensions` → bật **Developer mode**
+→ **Load unpacked** → chọn thư mục `extension` vừa giải nén. Hoặc lấy extension qua
+menu **Ứng dụng → Cài extension Google Flow…** trong ứng dụng.
+
 Cả hai bộ cài giữ nguyên bản ứng dụng đóng gói ngày **17/10/2026**. Tài liệu source
 tiếp tục được cập nhật độc lập; xem
 [ghi chú bản desktop](docs/releases/v1.3.1-beta.1-macos.md) và ghi chú tiếng Việt
