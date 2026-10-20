@@ -13,6 +13,7 @@ import psutil
 
 from scripts import muse_gateway as launcher
 from agent.services import muse_settings
+from agent.services.process_control import spawn_options
 
 
 class MuseGateway:
@@ -101,6 +102,8 @@ class MuseGateway:
                     pass
 
     async def spawn(self, *args, **kwargs):
+        if os.name == 'nt':
+            kwargs.update(spawn_options())
         task = asyncio.create_task(asyncio.create_subprocess_exec(*args, **kwargs))
         try:
             return await asyncio.shield(task)
