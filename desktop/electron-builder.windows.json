@@ -1,6 +1,7 @@
 {
   "appId": "com.frameweaver.desktop",
   "productName": "FrameWeaver",
+  "electronVersion": "44.8.0",
   "directories": { "output": "../release/windows-x64" },
   "artifactName": "FrameWeaver-${version}-Windows-x64-Setup.exe",
   "win": {
