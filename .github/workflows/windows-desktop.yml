@@ -46,7 +46,7 @@ jobs:
           if ((Test-Path desktop/.cache/windows/media/bin/ffmpeg.exe) -and (Test-Path desktop/.cache/windows/media/bin/ffprobe.exe)) {
             'cached=true' >> $env:GITHUB_OUTPUT
           }
-      - uses: msys2/setup-msys2@452bb7dc9a4f5deb681978c9ac2b2b19c2c24f85
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
         if: steps.media.outputs.cached != 'true'
         with:
           msystem: UCRT64
