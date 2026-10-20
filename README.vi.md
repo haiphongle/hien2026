@@ -14,6 +14,21 @@ chuẩn bị lời đọc và dựng video bằng FFmpeg.
 FrameWeaver kết hợp tạo cảnh với bàn dựng nhiều lớp, thư viện media, phân tích
 giọng nói, lời đọc, phụ đề và lịch sử bản xuất. Dự án hiện có bản preview để dùng thử.
 
+## Bản ứng dụng macOS beta
+
+**[Tải FrameWeaver 1.3.1 beta 1 cho Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)**
+— Mac M1 trở lên, macOS 13+, dung lượng khoảng 241 MB.
+
+DMG đã ký Developer ID, được Apple notarize và gắn ticket. Mở DMG rồi kéo
+FrameWeaver vào Applications; ứng dụng có sẵn Python và FFmpeg. Model AI tùy chọn
+và tài khoản nhà cung cấp được cài/kết nối riêng.
+
+Bộ cài giữ nguyên bản ứng dụng đóng gói ngày **17/10/2026**. Tài liệu source
+tiếp tục được cập nhật độc lập; xem
+[ghi chú bản desktop](docs/releases/v1.3.1-beta.1-macos.md) và ghi chú tiếng Việt
+đính kèm release để biết đúng phạm vi, cách cài và giới hạn. Phần cài đặt bằng
+lệnh bên dưới dành cho chạy source từ repository.
+
 ## Từ ý tưởng đến video của bạn
 
 **YouTube Shorts, Reels, truyện nhân quả, người que, nhân vật 2D — và nhiều hơn nữa.**

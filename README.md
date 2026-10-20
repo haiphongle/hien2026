@@ -31,6 +31,21 @@ FrameWeaver combines scene production with a broader editing workspace: layered
 timelines, media libraries, speech analysis, narration, subtitles, and saved exports.
 The project is currently available as a preview release.
 
+## macOS desktop beta
+
+**[Download FrameWeaver 1.3.1 beta 1 for Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)**
+— Apple Silicon (M1 or later), macOS 13+, approximately 241 MB.
+
+The DMG is Developer ID signed, Apple notarized, and stapled. Open it and drag
+FrameWeaver into Applications; Python and FFmpeg are included. Optional AI models
+and provider accounts are configured separately.
+
+This desktop installer keeps the application snapshot packaged on **17 October
+2026**. Source documentation continues independently; use the
+[desktop release notes](docs/releases/v1.3.1-beta.1-macos.md) for its exact scope,
+installation steps, and limitations. The source setup instructions below are for
+running from the repository.
+
 ## Creator showcase
 
 **YouTube Shorts. Reels. Illustrated stories. Stickman explainers. 2D characters — and more.**
