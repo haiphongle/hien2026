@@ -129,9 +129,14 @@ def finalize():
     if len(installers) != 1 or not (RELEASE / 'VERIFICATION-WINDOWS.json').is_file():
         raise RuntimeError('Installer and successful Windows smoke report required.')
     # The public preview is explicitly unsigned; never label it signed accidentally.
-    signature = run('powershell','-NoProfile','-Command',f"(Get-AuthenticodeSignature -LiteralPath '{installers[0]}').Status",capture_output=True,text=True)
+    signature = subprocess.run([shutil.which('pwsh') or 'powershell', '-NoProfile', '-NonInteractive', '-Command',
+        "$ErrorActionPreference='Stop'; (Get-AuthenticodeSignature -LiteralPath $env:FRAMEWEAVER_INSTALLER_PATH).Status.ToString()"],
+        env={**os.environ, 'FRAMEWEAVER_INSTALLER_PATH':str(installers[0])}, capture_output=True,text=True,encoding='utf-8')
+    if signature.returncode:
+        raise RuntimeError('Authenticode verification failed: ' + signature.stderr.strip())
     if signature.stdout.strip() != 'NotSigned':
         raise RuntimeError('Unexpected signing state; inspect before publishing.')
+    manifest['authenticode_status'] = signature.stdout.strip()
     sources = RELEASE / f'FrameWeaver-{LOCK["version"]}-Windows-x64-media-sources.zip'
     with zipfile.ZipFile(sources,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for name,url,sha in MEDIA_SOURCES:
