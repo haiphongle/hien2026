@@ -116,6 +116,7 @@ def main():
             process=subprocess.Popen([str(executable),'--enable-logging=stderr'],env=env,
                                      stdout=electron_log,stderr=subprocess.STDOUT)
             wait_ports(PORTS[:2],process=process)
+            assert 'Startup IPC accepted: ready' in (data/'desktop-startup.log').read_text(encoding='utf-8'), 'Startup bridge rejected the real local page'
             with httpx.Client(base_url=f'http://127.0.0.1:{PORTS[0]}',trust_env=False,timeout=15,
                               headers={'X-FlowKit-Local-Auth':'1'}) as client:
                 health=client.get('/health').raise_for_status().json()

@@ -3,7 +3,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
-const { pathToFileURL } = require('node:url');
+const { pathToFileURL, fileURLToPath } = require('node:url');
 
 const resource = path.join(process.resourcesPath, 'runtime');
 const windows = process.platform === 'win32';
@@ -56,6 +56,13 @@ async function openExternal(url) {
 }
 function internal(url) {
   try { return new URL(url).origin === origin; } catch { return false; }
+}
+function startupPage(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'file:' && !url.hostname &&
+      fs.realpathSync.native(fileURLToPath(url)) === fs.realpathSync.native(startup);
+  } catch { return false; }
 }
 async function dashboard() { await window.loadURL(origin); }
 async function start() {
@@ -142,7 +149,8 @@ function menu() {
 }
 ipcMain.handle('startup-action', async (event, action) => {
   trace(`Startup IPC ${action}: ${event.senderFrame?.url} expected ${pathToFileURL(startup).href}`);
-  if (event.senderFrame?.url !== pathToFileURL(startup).href) return;
+  if (!startupPage(event.senderFrame?.url)) return;
+  trace(`Startup IPC accepted: ${action}`);
   if (action === 'ready' && retryState) status(retryState.message, retryState.retry, retryState.reuse);
   if (action === 'retry') return start();
   if (action === 'reuse' && await health()) return dashboard();
