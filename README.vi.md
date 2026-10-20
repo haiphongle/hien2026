@@ -17,17 +17,23 @@ giọng nói, lời đọc, phụ đề và lịch sử bản xuất. Dự án h
 ## Bản ứng dụng macOS beta
 
 **[Tải FrameWeaver 1.3.1 beta 1 cho Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)**
-— Mac M1 trở lên, macOS 13+, dung lượng khoảng 241 MB.
+— macOS 13 trở lên. Chọn bộ cài theo loại máy:
 
-DMG đã ký Developer ID, được Apple notarize và gắn ticket. Mở DMG rồi kéo
+| Máy Mac | Bộ cài | Dung lượng |
+| --- | --- | --- |
+| Apple Silicon (M1 trở lên) | [DMG arm64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-arm64.dmg) | 241 MB |
+| Intel | [DMG x64](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-x64.dmg) | 253 MB |
+
+Cả hai DMG đã ký Developer ID, được Apple notarize và gắn ticket. Mở DMG rồi kéo
 FrameWeaver vào Applications; ứng dụng có sẵn Python và FFmpeg. Model AI tùy chọn
 và tài khoản nhà cung cấp được cài/kết nối riêng.
 
-Bộ cài giữ nguyên bản ứng dụng đóng gói ngày **17/10/2026**. Tài liệu source
+Cả hai bộ cài giữ nguyên bản ứng dụng đóng gói ngày **17/10/2026**. Tài liệu source
 tiếp tục được cập nhật độc lập; xem
 [ghi chú bản desktop](docs/releases/v1.3.1-beta.1-macos.md) và ghi chú tiếng Việt
 đính kèm release để biết đúng phạm vi, cách cài và giới hạn. Phần cài đặt bằng
-lệnh bên dưới dành cho chạy source từ repository.
+lệnh bên dưới dành cho chạy source từ repository. Bản Intel đã kiểm thử qua
+Rosetta; chưa kiểm thử trên máy Intel thật.
 
 ## Từ ý tưởng đến video của bạn
 

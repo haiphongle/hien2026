@@ -34,17 +34,23 @@ The project is currently available as a preview release.
 ## macOS desktop beta
 
 **[Download FrameWeaver 1.3.1 beta 1 for Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)**
-— Apple Silicon (M1 or later), macOS 13+, approximately 241 MB.
+— macOS 13 or later. Choose the installer for your Mac:
 
-The DMG is Developer ID signed, Apple notarized, and stapled. Open it and drag
+| Mac | Installer | Size |
+| --- | --- | --- |
+| Apple Silicon (M1 or later) | [arm64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-arm64.dmg) | 241 MB |
+| Intel | [x64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.1/FrameWeaver-1.3.1-beta.1-macOS-x64.dmg) | 253 MB |
+
+Both DMGs are Developer ID signed, Apple notarized, and stapled. Open one and drag
 FrameWeaver into Applications; Python and FFmpeg are included. Optional AI models
 and provider accounts are configured separately.
 
-This desktop installer keeps the application snapshot packaged on **17 October
+Both desktop installers keep the application snapshot packaged on **17 October
 2026**. Source documentation continues independently; use the
 [desktop release notes](docs/releases/v1.3.1-beta.1-macos.md) for its exact scope,
 installation steps, and limitations. The source setup instructions below are for
-running from the repository.
+running from the repository. The Intel edition was tested through Rosetta;
+testing on a physical Intel Mac is still pending.
 
 ## Creator showcase
 
