@@ -1,8 +1,8 @@
-# Muse AI · desktop beta 2
+# Muse AI · desktop beta 3
 
-[Tiếng Việt](MUSE.vi.md) · [macOS downloads](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)
+[Tiếng Việt](MUSE.vi.md) · [macOS downloads](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.3)
 
-Both **Apple Silicon and Intel** beta 2 apps include Muse integration for script
+Both **Apple Silicon and Intel** beta 3 apps include Muse integration for script
 planning, reference/scene images, and video from a starting image. This guide
 describes the **packaged desktop apps**, not the repository's older source preview.
 
@@ -73,7 +73,7 @@ In **Studio → Video người que**, choose the providers for content, images, 
 video individually. You can use Muse for planning and Google Flow for media, or
 Muse for all three supported stages. Keep the gateway running while using Muse.
 
-| Stage | Muse integration in beta 2 |
+| Stage | Muse integration in beta 3 |
 | --- | --- |
 | Script | Plan scenes from SRT or content; review the result before production |
 | Images | Character/reference and scene images; up to four image references per request |

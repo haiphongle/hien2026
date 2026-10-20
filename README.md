@@ -33,28 +33,41 @@ The project is currently available as a preview release.
 
 ## macOS desktop beta
 
-**[Download FrameWeaver 1.3.1 beta 2 for Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)**
+**[Download FrameWeaver 1.3.1 beta 3 for Mac](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.3)**
 — macOS 13 or later. Choose the installer for your Mac:
 
 | Mac | Installer | Size |
 | --- | --- | --- |
-| Apple Silicon (M1 or later) | [arm64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-macOS-arm64.dmg) | 247 MB |
-| Intel | [x64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-macOS-x64.dmg) | 265 MB |
+| Apple Silicon (M1 or later) | [arm64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.3/FrameWeaver-1.3.1-beta.3-macOS-arm64.dmg) | 240 MB |
+| Intel | [x64 DMG](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.3/FrameWeaver-1.3.1-beta.3-macOS-x64.dmg) | 253 MB |
 
 Both DMGs are Developer ID signed, Apple notarized, and stapled. Open one and drag
 FrameWeaver into Applications; Python and FFmpeg are included. Optional AI models
 and provider accounts are configured separately.
 
-For Google Flow, download the **[Chrome extension ZIP (0.3.6, ~381 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.2/FrameWeaver-1.3.1-beta.2-extension.zip)**,
+For Google Flow, download the **[Chrome extension ZIP (0.3.6, ~381 KB)](https://github.com/phucnguyentvp1/frameweaver/releases/download/v1.3.1-beta.3/FrameWeaver-1.3.1-beta.3-extension.zip)**,
 shared by both Mac editions. Extract it, open `chrome://extensions`, enable
 **Developer mode**, choose **Load unpacked**, and select the extracted `extension`
 folder. You can also get it from the app menu **Ứng dụng → Cài extension Google Flow…**.
 
 Both installers package the application snapshot from **20 October 2026**,
-including the **Google Flow connection check** and **Muse integration**. See the
-[beta 2 release guide](docs/releases/v1.3.1-beta.2-macos.md) for installation and
-verification details. The [older beta 1](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.1)
-remains available. Intel was tested through Rosetta, not on a physical Intel Mac.
+including **one-click ChatGPT component installation**, **Reload interface**,
+**live extension status**, the **Google Flow connection check**, and **Muse integration**. See the
+[beta 3 release guide](docs/releases/v1.3.1-beta.3-macos.md) for installation and
+verification details. The [older beta 2](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)
+and beta 1 remain available. Intel was tested through Rosetta, not on a physical Intel Mac.
+
+### ChatGPT setup without Terminal
+
+Open **Settings → ChatGPT**, install the optional component if it is missing,
+then **Sign in with ChatGPT**. The app downloads the pinned official OpenAI
+Codex CLI with SHA256 verification; no Node.js or administrator installation is
+needed. A separate **Test AI** button sends a small request using your account's
+allowance. Existing Codex installations take priority. See the
+[ChatGPT setup guide](docs/CHATGPT-DESKTOP.md).
+
+**Reload interface** is available in the top bar. Extension status also updates
+immediately after a connection check and refreshes automatically on reconnect.
 
 ### Muse AI in both Mac editions
 
@@ -74,8 +87,8 @@ image/video entitlement or cost. Narration still uses the existing TTS providers
 **Source vs desktop:** the repository's source preview and automatic GitHub
 “Source code” downloads are separate from the packaged desktop snapshot. The
 source instructions below describe that preview; Muse instructions above apply
-to the **beta 2 desktop apps**. This documentation update does not add the desktop
-Muse implementation to the source preview.
+to the **beta 3 desktop apps**. This documentation update does not add the desktop
+Muse or ChatGPT installer implementation to the source preview.
 
 ## Creator showcase
 
@@ -109,7 +122,7 @@ Explore the [demo and workspace gallery](docs/SHOWCASE.md) for full-size preview
 | Workspace | Capabilities |
 | --- | --- |
 | Scene production | Projects, characters, reference images, scene prompts, image/video generation queues, and stage monitoring |
-| Muse AI (desktop beta 2) | Script planning, reference/scene images, and image-to-video through an optional local muse2api gateway |
+| Muse AI (desktop beta 3) | Script planning, reference/scene images, and image-to-video through an optional local muse2api gateway |
 | Browser bridge | Chrome Manifest V3 extension for requests made inside your signed-in Google Flow tab |
 | Story styles | Illustrated style library, stickman and 2D characters, favorites, custom image references, and reusable production templates |
 | Narration and subtitles | Narration scripts, SRT editing, voice selection, and optional local TTS integrations |
@@ -149,7 +162,7 @@ and illustrated moral stories. Save favorites or add your own reference-based st
 <details>
   <summary><strong>Open the dashboard and connection guide</strong></summary>
   <p><img src="docs/images/frameweaver_dashboard.jpg" width="920" alt="FrameWeaver dashboard showing the setup guide and extension connection status" /></p>
-  <p>This earlier screenshot shows <strong>FrameWeaver 0.3.5</strong>; beta 2 includes extension <strong>0.3.6</strong>. See the <a href="docs/images/frameweaver_extension.jpg">extension UI preview</a>.</p>
+  <p>This earlier screenshot shows <strong>FrameWeaver 0.3.5</strong>; beta 3 includes extension <strong>0.3.6</strong>. See the <a href="docs/images/frameweaver_extension.jpg">extension UI preview</a>.</p>
 </details>
 
 ## Quick start
@@ -292,7 +305,8 @@ cross-platform test result is not claimed for this preview.
 
 | Guide | Contents |
 | --- | --- |
-| [Muse AI (desktop beta 2)](docs/MUSE.md) | Gateway setup, account connection, supported stages, and limitations |
+| [ChatGPT setup (desktop beta 3)](docs/CHATGPT-DESKTOP.md) | Install the optional component, sign in, test AI and refresh status |
+| [Muse AI (desktop beta 3)](docs/MUSE.md) | Gateway setup, account connection, supported stages, and limitations |
 | [Sharing and installation](docs/SHARING.md) | Environment setup, source archives, and distribution notes |
 | [Demo and workspace gallery](docs/SHOWCASE.md) | Creator examples, the timeline editor, style library, and dashboard |
 | [Technical reference](docs/REFERENCE.md) | Detailed API and workflow reference, including historical examples |

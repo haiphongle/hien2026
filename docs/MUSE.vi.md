@@ -1,8 +1,8 @@
-# Muse AI · desktop beta 2
+# Muse AI · desktop beta 3
 
-[English](MUSE.md) · [Tải bản macOS](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.2)
+[English](MUSE.md) · [Tải bản macOS](https://github.com/phucnguyentvp1/frameweaver/releases/tag/v1.3.1-beta.3)
 
-Cả **Apple Silicon và Intel** beta 2 đều tích hợp Muse để lên kịch bản, tạo ảnh
+Cả **Apple Silicon và Intel** beta 3 đều tích hợp Muse để lên kịch bản, tạo ảnh
 tham chiếu/ảnh cảnh và tạo video từ ảnh đầu. Hướng dẫn này dành cho **ứng dụng
 desktop đã đóng gói**, tách biệt với source preview cũ trên repository.
 
@@ -70,7 +70,7 @@ Trong **Studio → Video người que**, chọn riêng nhà cung cấp cho nội
 và video. Có thể dùng Muse lên kịch bản rồi Google Flow tạo media, hoặc dùng
 Muse cho cả ba công đoạn được hỗ trợ. Giữ gateway chạy khi dùng Muse.
 
-| Công đoạn | Hỗ trợ trong beta 2 |
+| Công đoạn | Hỗ trợ trong beta 3 |
 | --- | --- |
 | Kịch bản | Lên cảnh từ SRT/nội dung; duyệt trước khi sản xuất |
 | Ảnh | Ảnh nhân vật/tham chiếu và ảnh cảnh; tối đa bốn ảnh tham chiếu mỗi yêu cầu |
