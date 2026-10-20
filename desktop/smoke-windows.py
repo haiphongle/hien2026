@@ -27,10 +27,12 @@ def open_port(port):
         return connection.connect_ex(('127.0.0.1',port))==0
 
 
-def wait_ports(ports, opened=True, timeout=90):
+def wait_ports(ports, opened=True, timeout=90, process=None):
     deadline=time.monotonic()+timeout
     while time.monotonic()<deadline:
         if all(open_port(p)==opened for p in ports): return
+        if opened and process is not None and process.poll() is not None:
+            raise RuntimeError(f'Desktop exited before startup: {process.returncode}; see electron-smoke.log')
         time.sleep(.3)
     raise TimeoutError(f'Test ports did not become {"ready" if opened else "closed"}: {ports}')
 
@@ -109,9 +111,11 @@ def main():
              'FRAMEWEAVER_DESKTOP_TEST_PORT':str(PORTS[0]),'FRAMEWEAVER_DESKTOP_TEST_WS_PORT':str(PORTS[1]),
              'FRAMEWEAVER_DESKTOP_TEST_MUSE_PORT':str(PORTS[2]),'FRAMEWEAVER_DESKTOP_TEST_MUSE_CDP_PORT':str(PORTS[3])}
         process=None
+        electron_log=(RELEASE/'electron-smoke.log').open('wb')
         try:
-            process=subprocess.Popen([str(executable)],env=env)
-            wait_ports(PORTS[:2])
+            process=subprocess.Popen([str(executable),'--enable-logging=stderr'],env=env,
+                                     stdout=electron_log,stderr=subprocess.STDOUT)
+            wait_ports(PORTS[:2],process=process)
             with httpx.Client(base_url=f'http://127.0.0.1:{PORTS[0]}',trust_env=False,timeout=15,
                               headers={'X-FlowKit-Local-Auth':'1'}) as client:
                 health=client.get('/health').raise_for_status().json()
@@ -129,8 +133,9 @@ def main():
             marker=data/'.flowkit/muse-gateway/installed.json';stamp=marker.stat().st_mtime_ns
             report=runtime_checks(runtime,data,env)
             crash_and_reap(process);process=None
-            process=subprocess.Popen([str(executable)],env=env)
-            wait_ports(PORTS[:3],timeout=120)
+            process=subprocess.Popen([str(executable),'--enable-logging=stderr'],env=env,
+                                     stdout=electron_log,stderr=subprocess.STDOUT)
+            wait_ports(PORTS[:3],timeout=120,process=process)
             assert marker.stat().st_mtime_ns==stamp,'Gateway was unexpectedly reinstalled'
             crash_and_reap(process);process=None
             # Check the NSIS uninstall policy against the real default data path.
@@ -153,6 +158,8 @@ def main():
             print(json.dumps(report,indent=2,ensure_ascii=False))
         finally:
             if process and process.poll() is None: crash_and_reap(process)
+            electron_log.close()
+            print('Installed executable:',executable,'Test data exists:',data.exists(),flush=True)
             if (data/'logs/backend.log').is_file():
                 shutil.copy2(data/'logs/backend.log',RELEASE/'desktop-smoke.log')
             gateway_log=data/'.flowkit/muse-gateway/gateway.log'
