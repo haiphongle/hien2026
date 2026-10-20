@@ -129,6 +129,11 @@ def main():
                 except TimeoutError:
                     print('Gateway status:',client.get('/api/muse/gateway').json());raise
                 state=client.get('/api/muse/gateway').raise_for_status().json()
+                if state['busy'] and not state['running']:
+                    # The manager caches health for 3s; a newly bound TCP port
+                    # can precede its next successful application health check.
+                    time.sleep(4)
+                    state=client.get('/api/muse/gateway').raise_for_status().json()
                 assert state['installed'] and state['owned'] and state['running'],state
                 settings=client.get('/api/muse').json();assert settings['enabled'] and settings['auto_start']
             marker=data/'.flowkit/muse-gateway/installed.json';stamp=marker.stat().st_mtime_ns
