@@ -28,19 +28,15 @@ def test_windows_pe_architecture_rejects_non_executables(tmp_path):
 
 
 def test_windows_pipe_reader_reuses_worker_and_reaps_on_close(tmp_path, monkeypatch):
-    worker=tts_runtime.ManagedTTSWorker('kokoro',sys.executable,tmp_path,'test',tmp_path/'test.py')
-    def start(**_):
-        if worker._process: return
-        worker._process=subprocess.Popen([sys.executable,'-u','-c',
-            "import sys,json\nfor line in sys.stdin:\n print(json.dumps({'event':'result','results':[{'ok':True}]}),flush=True)"],
-            stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,bufsize=0)
-    monkeypatch.setattr(worker,'_start',start)
+    script=tmp_path/'test.py'
+    script.write_text("import sys,json\nfor line in sys.stdin:\n item=json.loads(line)['items'][0];print(json.dumps({'event':'result','results':[{'text':item['text']}]}),flush=True)",encoding='utf-8')
+    worker=tts_runtime.ManagedTTSWorker('kokoro',sys.executable,tmp_path,'test',script)
     # Exercise the Windows pipe path on macOS too, without replacing pathlib's OS.
     monkeypatch.setattr(tts_runtime,'os',SimpleNamespace(name='nt',read=os.read,environ=os.environ))
     try:
-        assert worker.generate({'items':[{'id':'one'}]})==[{'ok':True}]
+        assert worker.generate({'items':[{'id':'one','text':'Tiếng Việt · 中文'}]})==[{'text':'Tiếng Việt · 中文'}]
         pid=worker._process.pid;reader=worker._reader
-        assert worker.generate({'items':[{'id':'two'}]})==[{'ok':True}]
+        assert worker.generate({'items':[{'id':'two','text':'Lần thứ hai'}]})==[{'text':'Lần thứ hai'}]
         assert worker._process.pid==pid and worker._reader is reader
     finally: worker.close()
     assert not psutil.pid_exists(pid) and not reader.is_alive()

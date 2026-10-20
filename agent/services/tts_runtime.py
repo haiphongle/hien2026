@@ -124,7 +124,7 @@ class ManagedTTSWorker:
             env.pop("HF_HUB_OFFLINE", None)
         with log.open("w") as stderr:
             self._process = subprocess.Popen(
-                [self.python, "-I", "-u", str(self.script)],
+                [self.python, "-X", "utf8", "-I", "-u", str(self.script)],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, env=env, bufsize=0,
             )
 
