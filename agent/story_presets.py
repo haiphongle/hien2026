@@ -27,6 +27,22 @@ COSTUMES = {
     'custom': 'Follow the exact approved Character Bible clothing and accessories.',
 }
 
+
+def style_lock_sections(preset, *, anatomy='', background='', rendering='', costume='', contrast=''):
+    """One vocabulary for style thumbnails and real production, with legacy/custom fallbacks."""
+    if not contrast:
+        contrast = 'Readable contours against the chosen backdrop.'
+        if preset.get('background_type') != 'scene' and preset.get('ink') and preset.get('background'):
+            surface = {'white':'#ffffff', 'black':'#000000'}.get(preset.get('background_type'), preset['background'])
+            contrast += f' For a uniform backdrop, use {preset["ink"]} outlines against {surface}.'
+    return [
+        ('CHARACTER ANATOMY LOCK', ANATOMY.get(preset.get('anatomy'), anatomy)),
+        ('BACKGROUND LOCK', BACKGROUNDS.get(preset.get('background_type'), background)),
+        ('RENDERING STYLE LOCK', RENDERING.get(preset.get('rendering'), rendering)),
+        ('CONTRAST AND LINE LOCK', contrast),
+        ('COSTUME LOCK', COSTUMES.get(preset.get('costume'), costume)),
+    ]
+
 # New IDs keep saved projects and their reference caches unchanged.
 _RECIPES = (
     ('stick_white', 'Stickman – Nền trắng', 'Đầu tròn trắng, tay chân nét đen, nền trắng.', 'stick', 'white', 'minimal', 'simple', '#ffffff', '#222222'),

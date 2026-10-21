@@ -10,7 +10,7 @@ import tempfile
 from PIL import Image, ImageOps
 
 from agent.config import SHARED_OUTPUT_DIR
-from agent.story_presets import HTML_PRESETS, ANATOMY, BACKGROUNDS, RENDERING, COSTUMES
+from agent.story_presets import HTML_PRESETS, style_lock_sections
 from agent.services import reference_images, speech_store
 
 _lock = asyncio.Lock()
@@ -43,12 +43,7 @@ def sample_prompt(style_id):
         ('STYLE PREVIEW IMAGE PROMPT', 'Create one finished illustration, not a UI, collage or character sheet.'),
         ('ASPECT RATIO AND COMPOSITION', '3:2 landscape thumbnail. One fictional character, full body visible including feet, '
          'centered with generous margins. Clear readable silhouette at small size.'),
-        ('CHARACTER ANATOMY LOCK', ANATOMY[p['anatomy']]),
-        ('BACKGROUND LOCK', BACKGROUNDS[p['background_type']]),
-        ('RENDERING STYLE LOCK', RENDERING[p['rendering']]),
-        ('CONTRAST AND LINE LOCK', f'Readable contours against the chosen backdrop. '
-         f'For a uniform backdrop, use {p["ink"]} outlines against {p["background"]}.'),
-        ('COSTUME LOCK', COSTUMES[p['costume']]),
+        *style_lock_sections(p),
         ('ACTION AND PROPS', scene),
         ('CONSISTENCY', 'Keep the selected anatomy, background and rendering throughout. Natural connected limbs, '
          'readable face and relaxed posture. Do not copy a real person.'),

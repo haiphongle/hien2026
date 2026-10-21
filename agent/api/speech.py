@@ -143,7 +143,7 @@ async def download_srt(vid: str):
     await context(vid)
     doc = store.load_document(vid)
     return Response(store.srt_text(doc.cues), media_type="application/x-subrip; charset=utf-8",
-                    headers={"Content-Disposition": 'attachment; filename="subtitles.srt"'})
+                    headers={"Content-Disposition": 'attachment; filename="frameweaver-subtitles.srt"'})
 
 
 @router.get("/videos/{vid}/speech/cues/{cid}/audio")

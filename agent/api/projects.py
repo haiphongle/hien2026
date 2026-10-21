@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from typing import Literal
 
 import aiohttp
 from fastapi import APIRouter, HTTPException
@@ -28,12 +29,14 @@ _MEDIA_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 
 class CharacterPhotoUpload(BaseModel):
+    provider: Literal["flow", "muse2api"] = "flow"
     name: str = Field(min_length=1, max_length=100)
     image_base64: str
     voice_description: str = Field(default="", max_length=300)
 
 
 class CharacterPhotoURL(BaseModel):
+    provider: Literal["flow", "muse2api"] = "flow"
     name: str = Field(min_length=1, max_length=100)
     url: str = Field(min_length=8, max_length=4096)
 
@@ -301,11 +304,15 @@ async def update(pid: str, body: ProjectUpdate):
 
 
 @router.delete("/{pid}")
-async def delete(pid: str):
-    repo = _get_repo()
-    if not await repo.delete_project(pid):
-        raise HTTPException(404, "Project not found")
-    return {"ok": True}
+async def delete(pid: str, name: str = ''):
+    from agent.services import library_deletion
+    return await library_deletion.delete_project(pid, name)
+
+
+@router.get('/{pid}/deletion-info')
+async def deletion_info(pid: str):
+    from agent.services import library_deletion
+    return await library_deletion.project_info(pid)
 
 
 @router.post("/{pid}/characters/upload", response_model=Character)
@@ -333,23 +340,36 @@ async def upload_character_photo(pid: str, body: CharacterPhotoUpload):
     if not detected:
         raise HTTPException(400, "Use a PNG, JPEG, or WebP image")
     mime, extension = detected
+    target = None
+    if body.provider == 'muse2api':
+        from agent.services.muse_media import ROOT, save_image
+        from uuid import uuid4
+        media_id = str(uuid4())
+        ROOT.mkdir(parents=True, exist_ok=True)
+        target = ROOT / f'{media_id}.png'
+        try:
+            save_image(content, target)
+        except ValueError as exc:
+            target.unlink(missing_ok=True)
+            raise HTTPException(422, str(exc)) from exc
+    else:
+        client = get_flow_client()
+        if not client.connected:
+            raise HTTPException(503, "Flow extension is disconnected")
+        result = await client.upload_image(
+            body.image_base64, mime_type=mime, project_id=pid,
+            file_name=f"{slug}{extension}",
+        )
+        media_id = result.get("_mediaId")
+        if result.get("error") or not isinstance(media_id, str) or not _MEDIA_UUID.fullmatch(media_id):
+            raise HTTPException(502, f"Flow image upload failed: {result.get('error', 'no valid media ID')}")
 
-    client = get_flow_client()
-    if not client.connected:
-        raise HTTPException(503, "Flow extension is disconnected")
-    result = await client.upload_image(
-        body.image_base64, mime_type=mime, project_id=pid,
-        file_name=f"{slug}{extension}",
-    )
-    media_id = result.get("_mediaId")
-    if result.get("error") or not isinstance(media_id, str) or not _MEDIA_UUID.fullmatch(media_id):
-        raise HTTPException(502, f"Flow image upload failed: {result.get('error', 'no valid media ID')}")
-
-    character = await repo.create_character(
-        name=name, slug=slug, entity_type="character", media_id=media_id,
-        voice_description=body.voice_description.strip() or None,
-    )
+    character = None
     try:
+        character = await repo.create_character(
+            name=name, slug=slug, entity_type="character", media_id=media_id,
+            voice_description=body.voice_description.strip() or None,
+        )
         _REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
         (_REFERENCE_DIR / f"{character.id}{extension}").write_bytes(content)
         await repo.update("character", character.id,
@@ -357,8 +377,11 @@ async def upload_character_photo(pid: str, body: CharacterPhotoUpload):
         if not await repo.link_character_to_project(pid, character.id):
             raise RuntimeError("Could not link character to project")
     except Exception:
-        await repo.delete_character(character.id)
-        (_REFERENCE_DIR / f"{character.id}{extension}").unlink(missing_ok=True)
+        if character:
+            await repo.delete_character(character.id)
+            (_REFERENCE_DIR / f"{character.id}{extension}").unlink(missing_ok=True)
+        if target:
+            target.unlink(missing_ok=True)
         raise
     return await repo.get_character(character.id)
 
@@ -368,13 +391,13 @@ async def import_character_url(pid: str, body: CharacterPhotoURL):
     from agent.services.reference_images import download
     if not await _get_repo().get_project(pid):
         raise HTTPException(404, 'Project not found')
-    if not get_flow_client().connected:
+    if body.provider == 'flow' and not get_flow_client().connected:
         raise HTTPException(503, 'Flow extension is disconnected')
     try:
         content = await download(body.url.strip())
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return await upload_character_photo(pid, CharacterPhotoUpload(name=body.name, image_base64=base64.b64encode(content).decode()))
+    return await upload_character_photo(pid, CharacterPhotoUpload(name=body.name, image_base64=base64.b64encode(content).decode(), provider=body.provider))
 
 
 @router.post("/{pid}/characters/generate", response_model=CharacterReferenceGenerateResponse)
@@ -471,10 +494,8 @@ async def link_character(pid: str, cid: str):
 
 @router.delete("/{pid}/characters/{cid}")
 async def unlink_character(pid: str, cid: str):
-    repo = _get_repo()
-    if not await repo.unlink_character_from_project(pid, cid):
-        raise HTTPException(404, "Link not found")
-    return {"ok": True}
+    from agent.services import library_deletion
+    return await library_deletion.delete_character(cid, pid, unlink=True)
 
 
 @router.get("/{pid}/characters", response_model=list[Character])
@@ -692,4 +713,4 @@ async def get_project_thumbnail(pid: str, filename: str):
     path = (directory / filename).resolve()
     if not path.is_relative_to(directory) or not path.is_file():
         raise HTTPException(404, "Thumbnail file not found")
-    return FileResponse(path, filename=filename, headers={"Cache-Control": "private, no-cache"})
+    return FileResponse(path, filename=f"frameweaver-{filename}", headers={"Cache-Control": "private, no-cache"})

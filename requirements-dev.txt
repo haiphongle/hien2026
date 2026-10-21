@@ -4,7 +4,3 @@
 pytest>=8.0.0
 pytest-asyncio>=0.23.0   # repo sets asyncio_mode=auto in pytest.ini
 pytest-mock>=3.12.0      # `mocker` fixture, used by tests/unit/test_result_handler.py
-
-# Audio fixtures used by the speech-analysis unit tests.
-numpy>=1.26.0
-soundfile>=0.12.1

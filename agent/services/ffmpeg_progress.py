@@ -6,6 +6,7 @@ import tempfile
 import threading
 from collections.abc import Callable
 from agent.services.export_cancel import check_cancelled, current_token
+from agent.services.process_control import spawn_options
 
 
 def processing_timeout(duration: float, *, minimum: int = 600, multiplier: float = 4) -> int:
@@ -27,7 +28,7 @@ def run_ffmpeg(command: list[str], duration: float, timeout: float,
     command = [command[0], "-nostats", "-progress", "pipe:1", *command[1:]]
     timed_out = threading.Event()
     with tempfile.TemporaryFile() as errors:
-        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors, text=True, start_new_session=True) as process:
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors, text=True, **spawn_options()) as process:
             if token:
                 token.register(process.pid)
             def expire():

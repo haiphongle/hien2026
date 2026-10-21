@@ -6,11 +6,11 @@ import uuid
 from pathlib import Path
 
 from agent.db import crud
-from agent.services import media_jobs, pacing, speech_store
+from agent.services import image_effects, media_jobs, pacing, speech_store
 from agent.services import stickman_direction as direction
 
 
-def image_signature(body, scene):
+def image_signature(body, scene, *, legacy=False):
     from agent.services.stickman import digest, PRESETS
     parts = [body.style, body.orientation, str(body.character_id), str(body.second_character_id), body.dialogue, scene.action]
     rich = body.story_assets or scene.extras or scene.shot_kind != 'story' or any(c.role not in {'A', 'B'} for c in body.characters)
@@ -33,6 +33,11 @@ def image_signature(body, scene):
     analysis = body.analysis.model_dump(exclude_defaults=True)
     if context or analysis:
         parts += [context, analysis]
+    background = getattr(body, 'background', None)
+    if background:
+        parts.append(['background', background.description, str(background.image_id)])
+    if not legacy and direction.cast(body, scene) and scene.emotion != 'thinking':
+        parts.append({'emotion':scene.emotion})
     return digest(parts)
 
 
@@ -41,8 +46,10 @@ def video_prompt(scene, body=None, pid=None):
         motion = (' '.join(f'{start}-{end}s: {action}' for (start, end), action in zip([(0, 3), (3, 6), (6, 8)], scene.motion_beats))
                   + f' {scene.camera} Preserve the starting frame visual style and character identity. No spoken dialogue, no written text.')
     else:
-        motion = (f'0-3s: {scene.action} 3-6s: Continue the same action smoothly, with a {scene.emotion} reaction and '
-            f'{scene.gesture} gesture. 6-8s: Settle into a stable ending pose. '
+        reaction = (f', with a {scene.emotion} reaction and {scene.gesture} gesture'
+                    if body is None or direction.cast(body, scene) or scene.extras else '')
+        motion = (f'0-3s: {scene.action} 3-6s: Continue the same action smoothly{reaction}. '
+            '6-8s: Settle into a stable ending pose. '
             f'{scene.camera or "Steady camera"} No spoken dialogue, no written text.')
     if body is None:
         return motion
@@ -53,11 +60,13 @@ def video_prompt(scene, body=None, pid=None):
         exact_cast += f'. Background people: {scene.extras}. Preserve everyone already visible in the approved frame.'
     return direction.sections(('VIDEO ANIMATION PROMPT', 'Animate the approved storyboard starting frame.'),
         ('DURATION AND ASPECT RATIO', '8 seconds; ' + ('9:16' if body.orientation == 'VERTICAL' else '16:9')),
-        ('VISUAL STYLE AND ANATOMY', style['scene_prefix']),
+        *direction.style_sections(body, pid, style=style),
         ('EXACT VISIBLE CAST', exact_cast),
         *direction.shot_context(body, scene), ('TIMED ACTION AND CAMERA', motion),
         ('MOTION AND CONSISTENCY', 'Smooth readable acting with connected limbs and stable proportions. '
          'Preserve the approved identities, hair, clothing, screen direction, background and props. '
+         'Animate only the assigned action and timed beats, keeping the interaction and focal point readable. '
+         'Story context is explanatory, not extra events or new shots to generate. '
          'No new characters, identity morphing, gender swaps, flicker or style transformation.'),
         ('AUDIO', 'No spoken dialogue or narration; voice is added separately in postproduction.'),
         ('NEGATIVE PROMPT', style['negative_prompt']))
@@ -88,11 +97,15 @@ def record_preview(vid, body, scene):
     prefix = 'vertical' if body.orientation == 'VERTICAL' else 'horizontal'
     ident = str(uuid.UUID(scene[f'{prefix}_image_media_id']))
     items = speech_store.read_json(root/'preview_versions.json', [])
+    signature = image_signature(body, body.scenes[0])
+    for item in items:
+        if item['media_id'] == ident and item['signature'] == image_signature(body, body.scenes[0], legacy=True):
+            item['signature'] = signature
     if not any(item['media_id'] == ident for item in items):
-        items.append({'media_id': ident, 'signature': image_signature(body, body.scenes[0]),
+        items.append({'media_id': ident, 'signature': signature,
                       'scene_id': scene['id'], 'source_url': scene.get(f'{prefix}_image_url'),
                       'prompt': scene.get('image_prompt'), 'style': body.style, 'orientation': body.orientation})
-        speech_store.atomic_json(root/'preview_versions.json', items[-8:])
+    speech_store.atomic_json(root/'preview_versions.json', items[-8:])
 
 
 async def estimate(pid, body, vid=None):
@@ -108,20 +121,29 @@ async def estimate(pid, body, vid=None):
     rows = await crud.list_scenes(vid) if vid else []
     generation = speech_store.read_json(media_jobs.directory(vid)/'stickman'/'generation.json', {}) if vid else {}
     prefix = 'vertical' if body.orientation == 'VERTICAL' else 'horizontal'
-    images, videos = 0, 0
+    images, videos, kept = 0, 0, 0
     for i, scene in enumerate(body.scenes):
         row = rows[i] if i < len(rows) else {}
         changed = not old or i >= len(old.scenes) or image_signature(body, scene) != image_signature(old, old.scenes[i])
-        signature = generation.get(row.get('id'), {}).get('image')
+        state = generation.get(row.get('id'), {})
+        signature = state.get('image')
+        if old and i < len(old.scenes) and state.get('image_version') != 2 and signature == image_signature(old, old.scenes[i], legacy=True):
+            signature = image_signature(old, old.scenes[i])
         changed = changed or bool(signature and signature != image_signature(body, scene))
         images += body.motion != 'talk' and (changed or not row.get(f'{prefix}_image_media_id') or row.get(f'{prefix}_image_status') != 'COMPLETED')
-        videos += body.motion == 'ai' and (changed or not old or old.motion != 'ai' or not row.get(f'{prefix}_video_media_id') or video_prompt(scene, body, pid) != video_prompt(old.scenes[i], old, pid))
+        kept += not changed and image_effects.keep_clip(body, scene, row, generation.get(row.get('id'), {}), pid)
+        if image_effects.mode(body, scene) == 'ai':
+            from agent.services.stickman import digest
+            target = digest([video_prompt(scene, body, pid), row.get(f'{prefix}_image_media_id')])
+            videos += bool(changed or not row.get(f'{prefix}_video_media_id') or generation.get(row.get('id'), {}).get('video') != target)
     return {'reference_images': int(reference_count), 'scene_images': images, 'flow_clips': videos,
-            'local_clips': len(body.scenes), 'reused_scenes': len(body.scenes)-images if old and body.motion != 'talk' else 0}
+            'local_clips': len(body.scenes), 'kept_clips': kept, 'reused_scenes': len(body.scenes)-images if old and body.motion != 'talk' else 0}
 
 
 async def prepare(vid, body, project, scenes, voices, update):
     from agent.services import stickman as studio
+    if body.motion != 'talk':
+        direction.validate_shots(body)
     root = studio.directory(vid)
     generation = speech_store.read_json(root/'generation.json', {})
     prefix = 'vertical' if body.orientation == 'VERTICAL' else 'horizontal'
@@ -132,7 +154,7 @@ async def prepare(vid, body, project, scenes, voices, update):
             missing = [r['id'] for key, r in refs.items() if not r.get('media_id')
                        and ('VERTICAL' if specs[key][-1] == 'character' else 'HORIZONTAL') == orientation]
             if missing:
-                await studio.generate_images(vid, project['id'], missing, 'GENERATE_CHARACTER_IMAGE', orientation, update, 25, 5)
+                await studio.generate_images(vid, project['id'], missing, 'GENERATE_CHARACTER_IMAGE', orientation, update, 25, 5, provider=body.image_provider)
         refs = {key: await crud.get_character(r['id']) for key, r in refs.items()}
         for char in refs.values():
             uuid.UUID(char.get('media_id') or '')
@@ -146,13 +168,16 @@ async def prepare(vid, body, project, scenes, voices, update):
         batches = {'GENERATE_IMAGE': [], 'REGENERATE_IMAGE': []}
         image_targets = {r['id']: image_signature(body, s) for r, s in zip(scenes, body.scenes)}
         async def image_done(request):
-            generation.setdefault(request['scene_id'], {})['image'] = image_targets[request['scene_id']]
+            generation.setdefault(request['scene_id'], {}).update(image=image_targets[request['scene_id']], image_version=2)
             speech_store.atomic_json(root/'generation.json', generation)
         for row, scene in zip(scenes, body.scenes):
             prompt, names = direction.scene_prompt(body, scene, project['id'], refs)
             await crud.update_scene(row['id'], character_names=json.dumps(names), video_prompt=video_prompt(scene, body, project['id']),
                                     image_prompt=prompt)
-            state = generation.get(row['id'], {})
+            state = generation.setdefault(row['id'], {})
+            # Only old caches can omit emotion; revised plans already bind their old image to version 2.
+            if state.get('image_version') != 2 and state.get('image') == image_signature(body, scene, legacy=True):
+                state.update(image=image_targets[row['id']], image_version=2)
             current = row.get(f'{prefix}_image_media_id')
             # A pre-existing steps 1–3 image has no signature yet; adopt it once.
             changed = state.get('image') and state['image'] != image_signature(body, scene)
@@ -170,7 +195,7 @@ async def prepare(vid, body, project, scenes, voices, update):
             if preview and not body.preview_all:
                 ids = [sid for sid in ids if sid == scenes[0]['id']]
             if ids:
-                await studio.generate_images(vid, project['id'], ids, kind, body.orientation, update, 30, 15, image_done)
+                await studio.generate_images(vid, project['id'], ids, kind, body.orientation, update, 30, 15, image_done, provider=body.image_provider)
         scenes = await crud.list_scenes(vid)
         if preview:
             # A failed local download must not spend another image generation on retry.
@@ -181,15 +206,17 @@ async def prepare(vid, body, project, scenes, voices, update):
             update(result={'preview_url': f"/api/videos/{vid}/stickman/scenes/{scenes[0]['id']}/image"})
             return scenes, None, None
         for row, scene in zip(scenes, body.scenes):
-            generation.setdefault(row['id'], {})['image'] = image_signature(body, scene)
+            generation.setdefault(row['id'], {}).update(image=image_signature(body, scene), image_version=2)
         speech_store.atomic_json(root/'generation.json', generation)
-        if body.motion == 'ai':
+        if image_effects.uses_ai(body):
             batches = {'GENERATE_VIDEO': [], 'REGENERATE_VIDEO': []}
             video_targets = {r['id']: studio.digest([video_prompt(s, body, project['id']), r[f'{prefix}_image_media_id']]) for r, s in zip(scenes, body.scenes)}
             async def video_done(request):
                 generation[request['scene_id']]['video'] = video_targets[request['scene_id']]
                 speech_store.atomic_json(root/'generation.json', generation)
             for row, scene in zip(scenes, body.scenes):
+                if image_effects.mode(body, scene) != 'ai':
+                    continue
                 signature = studio.digest([video_prompt(scene, body, project['id']), row[f'{prefix}_image_media_id']])
                 state = generation[row['id']]
                 current = row.get(f'{prefix}_video_media_id')
@@ -202,21 +229,27 @@ async def prepare(vid, body, project, scenes, voices, update):
                 if ids:
                     from agent.services.stickman_models import selected
                     await studio.generate_images(vid, project['id'], ids, kind, body.orientation, update, 45, 15, video_done,
-                                                 video_model=selected(body, project))
+                                                 video_model=selected(body, project) if body.video_provider == 'flow' else None, provider=body.video_provider)
             scenes = await crud.list_scenes(vid)
             for row, scene in zip(scenes, body.scenes):
-                generation[row['id']]['video'] = studio.digest([video_prompt(scene, body, project['id']), row[f'{prefix}_image_media_id']])
+                if image_effects.mode(body, scene) == 'ai':
+                    generation[row['id']]['video'] = studio.digest([video_prompt(scene, body, project['id']), row[f'{prefix}_image_media_id']])
             speech_store.atomic_json(root/'generation.json', generation)
     renders = speech_store.read_json(root/'renders.json', {})
     paths, lengths, checks = [], [], []
     for index, (row, scene, voice) in enumerate(zip(scenes, body.scenes, voices)):
         update(progress=60+round(15*index/len(scenes)), stage=f'Dựng cảnh · {index+1}/{len(scenes)}')
         audio = Path(voice['audio_path'])
-        settings = {'style': body.style, 'orientation': body.orientation, 'motion': body.motion, 'dialogue': body.dialogue,
+        render_motion = 'ai' if image_effects.keep_clip(body, scene, row, generation.get(row['id'], {}), project['id']) else image_effects.mode(body, scene)
+        settings = {'style': body.style, 'orientation': body.orientation, 'motion': render_motion, 'dialogue': body.dialogue,
                     'speaker': scene.speaker, 'emotion': scene.emotion, 'gesture': scene.gesture}
-        if body.motion == 'ai' and scene.motion_beats:
+        if render_motion == 'effects':
+            settings['image_effect_version'] = 1
+            settings['image_effect'] = image_effects.selected(body, scene).model_dump(mode='json')
+            settings['movement'] = image_effects.camera(image_effects.selected(body, scene), index)['movement']
+        if render_motion == 'ai' and scene.motion_beats:
             settings['timing'] = 'full-motion-v1'
-        source_id = row.get(f'{prefix}_video_media_id') if body.motion == 'ai' else row.get(f'{prefix}_image_media_id')
+        source_id = row.get(f'{prefix}_video_media_id') if render_motion == 'ai' else row.get(f'{prefix}_image_media_id')
         key = studio.digest([settings, source_id if body.motion != 'talk' else None, pacing.fingerprint(audio)])
         target = root/'renders'/f'{key}.mp4'
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -230,7 +263,7 @@ async def prepare(vid, body, project, scenes, voices, update):
                     await media_jobs.process([sys.executable, '-m', 'agent.services.stickman_actor', str(spec), str(audio), str(target), str(thumbnail)], timeout=300)
                 finally:
                     target.with_name(f'.{key}.rendering.mp4').unlink(missing_ok=True)
-            elif body.motion == 'ai':
+            elif render_motion == 'ai':
                 raw = root/f'flow-{uuid.UUID(source_id)}.mp4'
                 if not raw.is_file():
                     from agent.services.video_reviewer import _download_via_get_media
@@ -257,11 +290,13 @@ async def prepare(vid, body, project, scenes, voices, update):
                     temporary.unlink(missing_ok=True)
             else:
                 image = await studio.image_file(vid, row[f'{prefix}_image_media_id'])
-                await studio.image_clip(image, target, voice['duration'], body.orientation, body.motion)
+                await studio.image_clip(image, target, voice['duration'], body.orientation, body.motion,
+                    **({'effect': image_effects.selected(body, scene), 'index': index} if render_motion == 'effects' else {}))
         info = await pacing.probe(target)
         if abs(info['duration']-length) > .06:
             raise ValueError(f'Cảnh {index+1} bị lệch thời lượng. Chưa xuất bản.')
-        renders[row['id']] = {'key': key, 'path': str(target), 'audio': str(audio), 'thumbnail': str(thumbnail), 'settings': settings}
+        renders[row['id']] = {'key': key, 'path': str(target), 'audio': str(audio), 'thumbnail': str(thumbnail), 'settings': settings,
+                              'image_media_id': row.get(f'{prefix}_image_media_id')}
         speech_store.atomic_json(root/'renders.json', renders)
         speech_store.atomic_json(target.with_suffix('.metadata.json'), renders[row['id']])
         paths.append(str(target)); lengths.append(length)
@@ -300,6 +335,8 @@ async def visual_review(vid, pid, body, scenes, update):
     prefix = 'vertical' if body.orientation == 'VERTICAL' else 'horizontal'
     checks = []
     for index, scene in enumerate(scenes):
+        if not scene.get(f'{prefix}_video_media_id') or image_effects.mode(body, body.scenes[index]) != 'ai':
+            continue
         update(progress=73, stage=f'Kiểm tra hình và nhân vật · {index+1}/{len(scenes)}')
         key = studio.digest([scene[f'{prefix}_video_media_id'], scene.get('video_prompt'), [c.get('media_id') for c in characters]])
         if key not in cached:

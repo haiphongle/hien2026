@@ -256,6 +256,14 @@ CREATE INDEX IF NOT EXISTS idx_request_scene ON request(scene_id);
         cursor = await db.execute("PRAGMA table_info(request)")
         if 'video_model' not in {row[1] for row in await cursor.fetchall()}:
             await db.execute("ALTER TABLE request ADD COLUMN video_model TEXT")
+        cursor = await db.execute("PRAGMA table_info(request)")
+        request_columns = {row[1] for row in await cursor.fetchall()}
+        if 'provider' not in request_columns:
+            await db.execute("ALTER TABLE request ADD COLUMN provider TEXT NOT NULL DEFAULT 'flow'")
+        if 'provider_model' not in request_columns:
+            await db.execute("ALTER TABLE request ADD COLUMN provider_model TEXT")
+        if 'provider_signature' not in request_columns:
+            await db.execute("ALTER TABLE request ADD COLUMN provider_signature TEXT")
         # Migration: add source column to scene table
         cursor = await db.execute("PRAGMA table_info(scene)")
         scene_columns = {row[1] for row in await cursor.fetchall()}

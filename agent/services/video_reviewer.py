@@ -130,6 +130,16 @@ class _URLExpiredError(Exception):
 
 async def _download_video(url: str, dest: Path) -> None:
     """Download video from URL to local path. Raises _URLExpiredError on 400."""
+    if url.startswith('file:'):
+        from urllib.parse import urlsplit, unquote
+        from agent.services.muse_media import local_file
+        import shutil
+        source = Path(unquote(urlsplit(url).path))
+        local = local_file(source.stem, '.mp4')
+        if not local or source.resolve() != local.resolve():
+            raise ValueError('Không tìm thấy video Muse đã lưu.')
+        await asyncio.to_thread(shutil.copyfile, local, dest)
+        return
     conn = aiohttp.TCPConnector(ssl=_ssl_ctx)
     async with aiohttp.ClientSession(connector=conn) as session:
         async with session.get(url) as resp:
@@ -148,6 +158,12 @@ async def _download_via_get_media(media_id: str, dest: Path) -> None:
     signed url to download, the legacy REST path inlined the bytes as base64.
     Try the url first, fall back to the encoded content.
     """
+    from agent.services.muse_media import local_file
+    local = local_file(media_id, '.mp4')
+    if local:
+        import shutil
+        await asyncio.to_thread(shutil.copyfile, local, dest)
+        return
     from agent.services.flow_client import get_flow_client
 
     client = get_flow_client()
@@ -682,7 +698,11 @@ async def _analyze_cli(
             f"at {fps}fps {stamp_note}, in chronological order (sheet 1 is earliest)."
         )
 
-    if provider == "codex":
+    if provider == 'muse2api':
+        from agent.services import ai_tasks
+        raw = await ai_tasks.complete(role, f"{sheet_intro}\n\n{base_prompt}",
+            schema={"type": "object"}, images=tuple(Path(s) for s in contact_sheets))
+    elif provider == "codex":
         full_prompt = f"{sheet_intro}\n\n{base_prompt}"
         raw = await _run_codex_cli(
             full_prompt, contact_sheets, model=role["model"], effort=role["effort"]

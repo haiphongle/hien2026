@@ -182,11 +182,11 @@ def _library(vid):
             atomic_json(path.with_suffix('.json'), {'id': asset_id, 'name': name, 'duration': duration, 'builtin': True})
         finally:
             staged.unlink(missing_ok=True)
-    return [{**read_json(p), 'url': f'/api/videos/{vid}/pacing/assets/{p.stem}'} for p in sorted(assets.glob('*.json')) if p.with_suffix('.wav').is_file()]
+    return [{**read_json(p), 'url': f'/api/videos/{vid}/pacing/assets/{p.stem}'} for p in sorted(assets.glob('*.json')) if not p.name.startswith('._') and p.with_suffix('.wav').is_file()]
 
 
 async def probe(path):
-    raw = await media_jobs.process(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type,width,height,avg_frame_rate:format=duration', '-of', 'json', str(path)], timeout=30)
+    raw = await media_jobs.process(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type,width,height,avg_frame_rate,duration:format=duration', '-of', 'json', str(path)], timeout=30)
     data = json.loads(raw)
     streams = data.get('streams', [])
     try:

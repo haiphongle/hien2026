@@ -1,0 +1,96 @@
+name: Windows desktop x64 preview
+
+on:
+  push:
+    branches: [build/windows-x64]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      GLA_RELOAD: '0'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-python@ec52d0af729a7c50ced4261d17a07916f43f5b8e
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - uses: actions/cache/restore@3edfce9056124e459a23f683a21433670d47daca
+        id: runtime-cache
+        with:
+          path: desktop/.cache/windows
+          key: windows-x64-v1-${{ hashFiles('desktop/windows-lock.json', 'desktop/runtime-lock.json', 'desktop/media-build.py', 'desktop/media-windows.sh', 'desktop/requirements-macos.lock') }}
+      - name: Install build and test dependencies
+        run: python -m pip install -r desktop/requirements-macos.lock -r requirements-dev.txt
+      - name: Portability contracts
+        run: python -m pytest tests/unit/test_windows_distribution.py tests/unit/test_propainter_runtime.py tests/unit/test_desktop_distribution.py tests/unit/test_codex_install.py -q
+      - name: Download checksum-pinned runtime and media sources
+        run: python desktop/build-windows.py --prepare
+      - name: Check media cache
+        id: media
+        shell: pwsh
+        run: |
+          if ((Test-Path desktop/.cache/windows/media/bin/ffmpeg.exe) -and (Test-Path desktop/.cache/windows/media/bin/ffprobe.exe)) {
+            'cached=true' >> $env:GITHUB_OUTPUT
+          }
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        if: steps.media.outputs.cached != 'true'
+        with:
+          msystem: UCRT64
+          install: make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-nasm
+      - name: Build static FFmpeg and x264 from pinned sources
+        if: steps.media.outputs.cached != 'true'
+        shell: msys2 {0}
+        run: |
+          set -o pipefail
+          bash desktop/media-windows.sh 2>&1 | tee desktop/.cache/windows/media-build.log
+      - uses: actions/cache/save@3edfce9056124e459a23f683a21433670d47daca
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        with:
+          path: desktop/.cache/windows
+          key: windows-x64-v1-${{ hashFiles('desktop/windows-lock.json', 'desktop/runtime-lock.json', 'desktop/media-build.py', 'desktop/media-windows.sh', 'desktop/requirements-macos.lock') }}
+      - name: Assemble isolated Windows runtime
+        run: python desktop/build-windows.py --web-dir desktop/web
+      - name: Create NSIS installer
+        working-directory: desktop
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts electron-builder@26.17.0
+          npx --no-install electron-builder --config electron-builder.windows.json --prepackaged build-windows/FrameWeaver --win nsis --x64 --publish never
+      - name: Test installed application and lifecycle on Windows
+        run: python desktop/smoke-windows.py
+      - name: Write unsigned preview manifest, sources and checksums
+        run: python desktop/build-windows.py --finalize
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: FrameWeaver-Windows-x64-preview
+          path: |
+            release/windows-x64/*-Setup.exe
+            release/windows-x64/*-media-sources.zip
+            release/windows-x64/*-manifest.json
+            release/windows-x64/VERIFICATION-WINDOWS.json
+            release/windows-x64/SHA256SUMS-WINDOWS.txt
+            release/windows-x64/README-WINDOWS.md
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: failure()
+        with:
+          name: Windows-build-diagnostics
+          path: |
+            release/windows-x64/*.log
+            desktop/.cache/windows/*.log
+          retention-days: 7

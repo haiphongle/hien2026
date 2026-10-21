@@ -1,13 +1,13 @@
 """Persisted, cancellable local import/ASR/translation jobs."""
 import asyncio
 import os
-import signal
 import time
 import uuid
 from pathlib import Path
 
 from agent.config import SHARED_OUTPUT_DIR
 from agent.services.speech_store import atomic_json, identifier, read_json
+from agent.services.process_control import kill_tree, spawn_options
 
 ROOT = SHARED_OUTPUT_DIR / "media_workbench"
 ACTIVE = {"QUEUED", "PROCESSING"}
@@ -44,6 +44,9 @@ def import_failure_cleanup(vid: str):
 
 
 def start(vid: str, kind: str, run, *, metadata=None):
+    from agent.services import storage_locations
+    if storage_locations.busy() or storage_locations.offline('output'):
+        raise ValueError('Nơi lưu dữ liệu đang chuyển hoặc chưa kết nối. Kiểm tra Cài đặt → Nơi lưu.')
     if vid in _tasks:
         raise ValueError("Video đang được xử lý. Đợi hoàn tất hoặc bấm Dừng.")
     path = directory(vid) / "job.json"
@@ -103,7 +106,7 @@ async def process(args: list[str], *, timeout=1800, on_line=None, cwd=None, stdi
     token = current_token.get()
     check_cancelled()
     proc = await asyncio.create_subprocess_exec(
-        *args, cwd=cwd, start_new_session=True,
+        *args, cwd=cwd, **spawn_options(),
         stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         limit=1024 * 1024,
@@ -136,10 +139,7 @@ async def process(args: list[str], *, timeout=1800, on_line=None, cwd=None, stdi
         return tail
     finally:
         if proc.returncode is None:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            kill_tree(proc.pid)
         if token:
             token.unregister(proc.pid)
         await proc.wait()

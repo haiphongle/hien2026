@@ -11,6 +11,15 @@ class TimelineModel(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
 
 
+class ImageEffect(TimelineModel):
+    preset: Literal['gentle', 'reflective', 'story', 'review', 'none'] = 'gentle'
+    movement: Literal['auto', 'still', 'zoom_in', 'zoom_out', 'pan_left', 'pan_right', 'drift_up', 'drift_down'] = 'auto'
+    intensity: Literal['light', 'medium', 'strong'] = 'light'
+    focus_x: float = Field(default=.5, ge=0, le=1)
+    focus_y: float = Field(default=.5, ge=0, le=1)
+    fit: Literal['cover', 'contain'] = 'cover'
+
+
 class Track(TimelineModel):
     id: UUID
     name: str = Field(max_length=80)
@@ -34,8 +43,21 @@ class Transition(TimelineModel):
 
 class TimelineCaption(TextStyle):
     size: float = Field(default=3.5, ge=1, le=30)
+    # Read old scaled titles without changing their appearance.
+    layout_size: float | None = Field(default=None, ge=1, le=30)
+    box_width: float | None = Field(default=None, ge=.02, le=1)
+    box_height: float | None = Field(default=None, ge=.02, le=1)
     x: float = Field(default=.5, ge=0, le=1)
     y: float = Field(default=.85, ge=0, le=1)
+    opacity: float = Field(default=1, ge=0, le=1)
+    hop_interval: Literal[0, 3, 5, 10, 15] = 0
+    hop_offset: float = Field(default=0, ge=0, le=MAX_DURATION * 2)
+
+    @model_validator(mode='after')
+    def text_box(self):
+        if (self.box_width is None) != (self.box_height is None):
+            raise ValueError('Khung chữ cần cả chiều rộng và chiều cao.')
+        return self
 
 
 class Ducking(TimelineModel):
@@ -80,6 +102,8 @@ class Clip(TimelineModel):
     gain: float = Field(default=1, ge=0, le=2)
     muted: bool = False
     transition: Transition | None = None
+    image_effect: ImageEffect | None = None
+    image_span: float | None = Field(default=None, gt=0, le=MAX_DURATION)
     overlay: VideoOverlay | None = None
     group: UUID | None = None
     anchor: UUID | None = None
@@ -130,6 +154,8 @@ class TimelineDocument(TimelineModel):
             if clip.track_id not in tracks or clip.start + clip.duration > MAX_DURATION + 1e-6:
                 raise ValueError(f'Đoạn nằm ngoài lớp hoặc vượt giới hạn {MAX_DURATION // 60} phút.')
             kind = tracks[clip.track_id].kind
+            if (clip.image_effect is not None or clip.image_span is not None) and kind != 'video':
+                raise ValueError('Hiệu ứng ảnh chỉ dùng trên lớp hình ảnh chính.')
             if clip.transition and kind != 'video':
                 raise ValueError('Chuyển cảnh chỉ dùng trên lớp hình ảnh chính.')
             if kind in {'video', 'overlay', 'audio'} and not clip.asset_id:

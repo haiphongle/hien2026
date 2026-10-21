@@ -5,6 +5,17 @@ from agent.models.request import Request, RequestCreate
 from agent.models.enums import StatusType
 from agent.db import crud
 
+def prepare_provider(data):
+    if data.get('provider') == 'muse2api':
+        from agent.services import muse_settings
+        if not muse_settings.configured():
+            raise HTTPException(503, 'Muse chưa kết nối. Mở Cài đặt → Muse.')
+        settings = muse_settings.load()
+        model = settings.video_model if 'VIDEO' in data['type'] else settings.image_model
+        data['provider_model'] = data.get('provider_model') or model
+    return data
+
+
 router = APIRouter(prefix="/requests", tags=["requests"])
 
 
@@ -33,7 +44,9 @@ class BatchStatus(BaseModel):
 
 @router.post("", response_model=Request)
 async def create(body: RequestCreate):
-    data = body.model_dump(exclude_none=True)
+    if body.provider == 'muse2api':
+        return (await create_batch(BatchRequestCreate(requests=[body])))[0]
+    data = prepare_provider(body.model_dump(exclude_none=True))
     data["req_type"] = data.pop("type")
 
     # Reject if there's already an active request for the same scene + type
@@ -67,6 +80,7 @@ async def create(body: RequestCreate):
 async def create_batch(body: BatchRequestCreate):
     """Submit multiple requests atomically. Server handles throttling (max 5 concurrent, 10s cooldown).
     Duplicate active requests for the same scene+type are skipped (not errors)."""
+    prepared = [prepare_provider(item.model_dump(exclude_none=True)) for item in body.requests]
     # Auto-set video orientation from the batch (tracks current active orientation)
     _seen_vids: set[str] = set()
     for item in body.requests:
@@ -76,8 +90,7 @@ async def create_batch(body: BatchRequestCreate):
             _seen_vids.add(vid)
             await crud.update_video(vid, orientation=orient)
     results = []
-    for item in body.requests:
-        data = item.model_dump(exclude_none=True)
+    for data in prepared:
         data["req_type"] = data.pop("type")
         scene_id = data.get("scene_id")
         character_id = data.get("character_id")
@@ -99,6 +112,17 @@ async def create_batch(body: BatchRequestCreate):
                       and r.get("status") in ("PENDING", "PROCESSING")]
             if active:
                 results.append(active[0])
+                continue
+        # Reuse a submitted Muse task after timeout/cancel instead of paying twice.
+        if data.get('provider') == 'muse2api':
+            previous = await crud.list_requests(video_id=data.get('video_id'), project_id=data.get('project_id'))
+            resumable = next((r for r in previous if r.get('provider') == 'muse2api'
+                and r['type'] == req_type and r.get('scene_id') == scene_id
+                and r.get('character_id') == character_id and r.get('orientation') == data.get('orientation')
+                and r['status'] == 'FAILED' and r.get('request_id')
+                and r.get('provider_model') == data.get('provider_model')), None)
+            if resumable:
+                results.append(await crud.update_request(resumable['id'], status='PENDING', error_message=None, next_retry_at=None, retry_count=0))
                 continue
         results.append(await crud.create_request(**data))
         if req_type == "GENERATE_VIDEO_OMNI" and data.get("video_id"):
@@ -151,6 +175,18 @@ async def get(rid: str):
     if not r:
         raise HTTPException(404, "Request not found")
     return r
+
+
+@router.post("/{rid}/cancel", response_model=Request)
+async def cancel(rid: str):
+    r = await crud.get_request(rid)
+    if not r:
+        raise HTTPException(404, 'Request not found')
+    if r.get('provider') != 'muse2api':
+        raise HTTPException(422, 'Thao tác này chỉ dừng chờ tác vụ Muse.')
+    from agent.worker.processor import get_worker_controller
+    await get_worker_controller().cancel_muse(rid)
+    return await crud.get_request(rid)
 
 
 @router.patch("/{rid}", response_model=Request)

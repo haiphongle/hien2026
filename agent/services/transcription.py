@@ -16,6 +16,7 @@ from agent.services.ffmpeg_progress import processing_timeout
 from agent.services.speech_store import atomic_json, read_json
 from agent.services.video_assembly import render_video_to_file, video_export_lock
 from agent.services.tts_runtime import TTS_SEMAPHORE
+from agent.services import model_storage, whisper_models
 
 MODEL_DIR = BASE_DIR / ".flowkit" / "models" / "whisper"
 MODELS = {"small": "Whisper Small · đa ngôn ngữ", "base": "Whisper Base · nhanh hơn",
@@ -34,8 +35,12 @@ def binary():
 
 
 def models():
-    return [{"id": key, "name": name, "ready": (MODEL_DIR / f"ggml-{key}.bin").is_file()}
+    return [{"id": key, "name": name, **whisper_models.status(key, model_path(key).parent)}
             for key, name in MODELS.items()]
+
+
+def model_path(model):
+    return model_storage.location(f'whisper-{model}', MODEL_DIR)/f'ggml-{model}.bin'
 
 
 def normalize(data: dict, duration: float, *, allow_empty=False) -> list[Cue]:
@@ -112,15 +117,16 @@ def bounds(duration, start_time, end_time):
     return end_time
 
 
-def start(vid, model, language, document, scenes, *, start_time=0, end_time=None, restart=False):
+def start(vid, model, language, document, scenes, *, start_time=0, end_time=None, restart=False, source_info=None):
     executable = binary()
-    weights = MODEL_DIR / f"ggml-{model}.bin"
-    if not executable or model not in MODELS or not weights.is_file():
+    weights = model_path(model)
+    model_storage.assert_available(f'whisper-{model}', weights.parent)
+    if not executable or model not in MODELS or not whisper_models.status(model, weights.parent)['ready']:
         raise ValueError("Chưa có whisper-cli hoặc model đã chọn trên máy.")
     if language not in LANGUAGES:
         raise ValueError("Ngôn ngữ không hợp lệ.")
-    info = imported_video.metadata(vid)
-    saved_edit = timeline.load(vid)
+    info = source_info if source_info is not None else imported_video.metadata(vid)
+    saved_edit = None if source_info is not None else timeline.load(vid)
     edit = TimelineDocument.model_validate(saved_edit['document']) if saved_edit and saved_edit['document']['clips'] else None
     edit_assets = timeline.validate_assets(vid, edit) if edit else {}
     if edit:
@@ -135,7 +141,7 @@ def start(vid, model, language, document, scenes, *, start_time=0, end_time=None
         async with TTS_SEMAPHORE:
             with tempfile.TemporaryDirectory(prefix="asr-", dir=jobs.directory(vid)) as temp:
                 work = Path(temp)
-                source = imported_video.source_path(vid)
+                source = Path(source_info['path']) if source_info is not None else imported_video.source_path(vid)
                 if edit:
                     duration = timeline.duration(edit)
                 elif info:
@@ -217,4 +223,5 @@ def start(vid, model, language, document, scenes, *, start_time=0, end_time=None
                           "scope": "range" if start_time > 0 or stop < duration else "all",
                           "kind": "transcript"}
                 atomic_json(jobs.directory(vid) / "transcript.json", result)
-    return jobs.start(vid, "transcribe", run)
+    return jobs.start(vid, "content_transcribe" if source_info is not None else "transcribe", run,
+                      metadata={'model': model, 'engine': 'Whisper'} if source_info is not None else None)

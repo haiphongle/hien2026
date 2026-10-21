@@ -107,13 +107,13 @@ def start_clone(voice_id: str):
                 update(stage=stage)
             result = await asyncio.to_thread(generate, {
                 "enroll": str(directory / "reference.wav"), "voice_output": str(directory / "voice.json"),
-                "allow_download": not (vieneu.VIENEU_CACHE_DIR / "clone_ready.json").is_file(),
+                "allow_download": not (vieneu.worker.cache_dir / "clone_ready.json").is_file(),
                 "identity": {"engine": "vieneu", "voice_id": voice_id, "voice_name": profile["name"]},
                 "items": [{"id": voice_id, "text": vieneu.SAMPLE_TEXT, "output": str(directory / "demo.wav")}],
             }, progress)
             if result[0]["ok"]:
                 profile["status"] = "READY"
                 store.atomic_json(directory / "profile.json", profile)
-                store.atomic_json(vieneu.VIENEU_CACHE_DIR / "clone_ready.json", {"sdk": vieneu.SDK_VERSION})
+                store.atomic_json(vieneu.worker.cache_dir / "clone_ready.json", {"sdk": vieneu.SDK_VERSION})
             update(results={voice_id: result[0]}, completed=1)
     return speech_jobs.start_job(voice_id, directory / "job.json", 1, run)

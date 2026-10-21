@@ -3,11 +3,13 @@ import re
 from urllib.parse import urlsplit
 
 import aiohttp
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
 from agent.config import FLOW_PROJECT_ID, FLOW_ALLOW_DEGRADED
+from agent import config
+from agent.paths import DESKTOP
 from agent.services.flow_client import get_flow_client
 from agent.services.omni_flash import (
     check_omni_flash_status,
@@ -144,6 +146,23 @@ async def extension_status():
         "flow_project_id": FLOW_PROJECT_ID or None,
         "allow_degraded": FLOW_ALLOW_DEGRADED,
         "flow_key_present": client._flow_key is not None,
+    }
+
+
+@router.get("/check-connection")
+async def check_connection(request: Request, response: Response):
+    """Diagnose the bridge without generating media or spending credits."""
+    response.headers["Cache-Control"] = "no-store"
+    result = await get_flow_client().check_connection()
+    return {
+        **result,
+        "backend": {
+            "status": "ok",
+            "version": request.app.version,
+            "mode": "desktop" if DESKTOP else "source",
+            "api_port": config.API_PORT,
+            "ws_port": config.WS_PORT,
+        },
     }
 
 
@@ -400,6 +419,11 @@ async def download_image(media_id: str):
     """Stream a freshly signed Flow image to the browser without saving it on this server."""
     if not _MEDIA_UUID.fullmatch(media_id):
         raise HTTPException(400, "Invalid media_id")
+
+    from agent.services.muse_media import local_image
+    local = local_image(media_id)
+    if local:
+        return Response(content=local.read_bytes(), media_type='image/png')
 
     client = get_flow_client()
     if not client.connected:

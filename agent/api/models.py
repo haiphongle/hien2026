@@ -1,7 +1,6 @@
 """Model configuration API — view and update video/image/upscale model keys."""
 import json
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter
 
@@ -10,7 +9,7 @@ from agent import config
 router = APIRouter(prefix="/api/models", tags=["models"])
 logger = logging.getLogger(__name__)
 
-_MODELS_FILE = Path(__file__).parent.parent / "models.json"
+_MODELS_FILE = config._MODELS_FILE
 
 
 def _read_models() -> dict:

@@ -1,5 +1,5 @@
 # Isolated environment only; keep these out of the FastAPI/VieNeu environments.
-./kokoro-main
+kokoro==0.9.4
 misaki[en]==0.9.4
 torch==2.14.1
 transformers==4.57.6

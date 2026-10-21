@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "FrameWeaver",
-  "version": "0.3.5",
-  "description": "Local agent bridge for Google Flow \u2014 runs batchexecute RPCs inside a signed-in flow.google.com tab, mints reCAPTCHA, proxies API calls",
+  "version": "0.3.6",
+  "description": "FrameWeaver browser bridge for Google Flow \u2014 runs batchexecute RPCs inside a signed-in flow.google.com tab, mints reCAPTCHA, proxies API calls",
   "permissions": [
     "storage",
     "alarms",

@@ -1,11 +1,13 @@
 """Local account controls for the same Codex CLI used by FrameWeaver's AI jobs."""
 import ipaddress
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from agent.services.codex_auth import codex_auth
+from agent.services.codex_install import codex_installer
 
 
 def loopback(host):
@@ -42,7 +44,30 @@ router = APIRouter(prefix="/api/providers/codex", tags=["providers"], dependenci
 
 @router.get("/auth")
 async def status(refresh: bool = False):
-    return await codex_auth.status(refresh)
+    installation = codex_installer.status()
+    # Installation must immediately invalidate a cached "missing CLI" account state.
+    refresh = refresh or (installation['installed'] and codex_auth.account.get('state') == 'missing')
+    return {**await codex_auth.status(refresh), 'installation': installation}
+
+
+class InstallCodex(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    confirm: Literal[True]
+
+
+@router.post('/installation', status_code=202)
+async def install(body: InstallCodex):
+    try:
+        if codex_auth.active():
+            raise ValueError('Đợi hoàn tất hoặc hủy đăng nhập trước khi cài thành phần.')
+        return codex_installer.start()
+    except (ValueError, OSError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.delete('/installation')
+async def cancel_install():
+    return await codex_installer.cancel()
 
 
 @router.post("/login")

@@ -367,16 +367,18 @@ async def propainter_clips(vid: UUID, body: ProPainterClipsRequest):
         raise HTTPException(409, 'Bản dựng vừa thay đổi. Lưu rồi thử lại.')
     async def run(update):
         completed = []
-        for index, (source, start, duration, binding) in enumerate(records):
-            def progress(index=index, **changes):
-                changes.pop('result', None)
-                update(stage=f'Cảnh {index+1}/{len(records)} · {changes.get("stage", "Đang xử lý")}',
-                       progress=min(99, round((index*100+changes.get('progress', 0))/len(records))),
-                       result={'trial_ids': completed.copy()})
-            result = await restore.run_clip(key, source, start, duration, body.region, body.dilation, body.max_side, [binding], progress)
-            if result['trial_id'] not in completed:
-                completed.append(result['trial_id'])
-            update(result={'trial_ids': completed.copy()})
+        update(stage="Đang chờ worker ProPainter", progress=0)
+        async with trial.inference_session():
+            for index, (source, start, duration, binding) in enumerate(records):
+                def progress(index=index, **changes):
+                    changes.pop('result', None)
+                    update(stage=f'Cảnh {index+1}/{len(records)} · {changes.get("stage", "Đang xử lý")}',
+                           progress=min(99, round((index*100+changes.get('progress', 0))/len(records))),
+                           result={'trial_ids': completed.copy()})
+                result = await restore.run_clip(key, source, start, duration, body.region, body.dilation, body.max_side, [binding], progress, mode=body.processing_mode)
+                if result['trial_id'] not in completed:
+                    completed.append(result['trial_id'])
+                update(result={'trial_ids': completed.copy()})
     return media_jobs.start(key, 'propainter-clips', run)
 
 
@@ -427,7 +429,7 @@ async def propainter_result(vid: UUID, trial_id: UUID, download: bool = False):
     path = editing.directory(str(vid)) / 'propainter' / f'{trial_id}.mp4'
     if not path.is_file():
         raise HTTPException(404, 'Không tìm thấy đoạn thử.')
-    return FileResponse(path, media_type='video/mp4', filename=f'propainter-{trial_id}.mp4', content_disposition_type='attachment' if download else 'inline')
+    return FileResponse(path, media_type='video/mp4', filename=f'frameweaver-propainter-{trial_id}.mp4', content_disposition_type='attachment' if download else 'inline')
 
 
 @router.get('/{vid}/editing/propainter/results/{trial_id}/before')

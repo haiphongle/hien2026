@@ -15,6 +15,8 @@
  */
 
 const AGENT_WS_URL = 'ws://127.0.0.1:9222';
+// NOTE: This is a browser-restricted public API key — safe to ship in extension bundles.
+const API_KEY = 'AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY';
 
 // labs.google/fx/tools/flow still resolves but redirects here, so in practice a
 // signed-in tab is only ever flow.google.com/*. The legacy patterns stay for an
@@ -199,6 +201,34 @@ async function captureTokenFromFlowTab({ createIfMissing = false } = {}) {
 
 // ─── WebSocket to Agent ─────────────────────────────────────
 
+async function inspectFlowConnection() {
+  // Inspect existing tabs only. A diagnostic must not open/reload tabs or run RPCs.
+  let tabCount = 0;
+  try {
+    const tabs = await chrome.tabs.query({ url: flowUrls });
+    tabCount = tabs.length;
+    const tab = tabs.find(candidate => !candidate.discarded) || tabs[0];
+    if (!tab) return { state: 'no_tab', tab_count: 0 };
+    if (tab.discarded) return { state: 'tab_discarded', tab_count: tabCount };
+    if (tab.status === 'loading') return { state: 'tab_loading', tab_count: tabCount };
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: 'MAIN',
+      func: () => ({
+        // Return booleans only: never transfer page tokens, cookies or account names.
+        sessionPresent: Boolean(globalThis.WIZ_global_data?.SNlM0e),
+        loading: document.readyState === 'loading',
+      }),
+    });
+    const page = results?.[0]?.result;
+    const state = typeof page?.sessionPresent !== 'boolean' ? 'page_unavailable'
+      : page.loading ? 'tab_loading' : page.sessionPresent ? 'ready' : 'session_missing';
+    return { state, tab_count: tabCount };
+  } catch {
+    return { state: 'page_unavailable', tab_count: tabCount };
+  }
+}
+
 function connectToAgent() {
   if (manualDisconnect) return;
   if (ws?.readyState === WebSocket.CONNECTING) return;
@@ -246,16 +276,23 @@ function connectToAgent() {
       } else if (msg.method === 'solve_captcha') {
         await handleSolveCaptcha(msg);
       } else if (msg.method === 'get_status') {
-        sendToAgent({
+        const diagnostic = msg.params?.diagnose_flow === true;
+        const response = {
           id: msg.id,
-          result: {
+          result: diagnostic ? {
+            extensionVersion: chrome.runtime.getManifest().version,
+            flow: await inspectFlowConnection(),
+          } : {
             state,
             flowKeyPresent: !!flowKey,
             manualDisconnect,
             tokenAge: metrics.tokenCapturedAt ? Date.now() - metrics.tokenCapturedAt : null,
             metrics,
           },
-        });
+        };
+        // The read-only probe must work even when media storage blocks POST callbacks.
+        if (diagnostic && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(response));
+        else sendToAgent(response);
       } else if (msg.type === 'callback_secret') {
         callbackSecret = msg.secret;
         chrome.storage.local.set({ callbackSecret: msg.secret });

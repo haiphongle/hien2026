@@ -1,5 +1,5 @@
 """Picture-only joins: hold the outgoing final frame, without moving audio or captions."""
-from agent.services import editing, timeline_overlay
+from agent.services import editing, image_effects, timeline_overlay
 
 FILTERS = {'dissolve': 'fade', 'blur': 'fade', 'black': 'fadeblack', 'slide': 'slideleft', 'light': 'fadewhite'}
 
@@ -13,7 +13,7 @@ def joins(document):
             for left, right in zip(clips, clips[1:]) if right.transition and abs(left.start+left.duration-right.start) < 1e-5}
 
 
-def compose(previous, source, value, duration, elapsed, frame, fps, width, height, split=False):
+def compose(previous, source, value, duration, elapsed, frame, fps, width, height, split=False, *, image_size=None):
     """Only two decoders per segment. Cropped exports continue the same transition phase."""
     at = min(source['duration'] - 1/fps, previous.source_in + (previous.duration-1/fps)*previous.speed)
     args = ['-ss', str(max(0, at)), '-i', source['path']]
@@ -25,6 +25,14 @@ def compose(previous, source, value, duration, elapsed, frame, fps, width, heigh
     # Padding trimmed-away input frames makes seek/range/PiP boundaries share the full join phase.
     new_padding = f'tpad=start_mode=clone:start_duration={elapsed},' if elapsed > 1e-6 else ''
     graph = f'[1:v]trim=end_frame=1,setpts=PTS-STARTPTS[heldsource];{layout};'
+    if source.get('is_image'):
+        iw, ih = image_size or (width, height)
+        held = previous.model_copy(update={'source_in': previous.source_in + (previous.duration-1/fps)*previous.speed})
+        effect = image_effects.clip_filter(held, source, 1/fps, fps, iw, ih)
+        layout, _ = editing.layout_filter(pane, iw, ih)
+        layout = layout.replace('[0:v]', '[heldsource]').replace('[vout]', '[heldlayout]')
+        args = ['-i', source['path']]
+        graph = f'[1:v]{effect},setpts=PTS-STARTPTS[heldsource];{layout};'
     graph += f'[heldlayout]{padding}{blur}fps={fps},setsar=1,tpad=stop_mode=clone:stop_duration={duration},trim=duration={duration+1/fps},format=yuv444p,settb=AVTB[held];'
     graph += f'[vout]{new_padding}setsar=1,format=yuv444p,settb=AVTB[incoming];'
     graph += f'[held][incoming]xfade=transition={FILTERS[value.kind]}:duration={duration}:offset=0,trim=start={elapsed},setpts=PTS-STARTPTS,format=yuv420p[transitioned]'

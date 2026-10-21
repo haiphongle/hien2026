@@ -11,6 +11,7 @@ from contextlib import suppress
 from urllib.parse import urlsplit
 
 from agent.services.cli_providers import executable
+from agent.services.process_control import spawn_options
 
 LOGIN_TIMEOUT = 300
 RPC_TIMEOUT = 20
@@ -58,7 +59,7 @@ class CodexSession:
                 self.binary, "app-server", "--listen", "stdio://",
                 "-c", 'model_provider="openai"', "-c", 'approval_policy="never"',
                 "-c", 'sandbox_mode="read-only"',
-                cwd=self.directory.name, start_new_session=True,
+                cwd=self.directory.name, **spawn_options(),
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL, limit=512 * 1024,
             )
@@ -78,12 +79,18 @@ class CodexSession:
         if self.proc:
             if self.proc.returncode is None:
                 with suppress(ProcessLookupError):
-                    os.killpg(self.proc.pid, signal.SIGTERM)
+                    if os.name == 'nt':
+                        self.proc.terminate()
+                    else:
+                        os.killpg(self.proc.pid, signal.SIGTERM)
                 try:
                     await asyncio.wait_for(self.proc.wait(), 3)
                 except TimeoutError:
                     with suppress(ProcessLookupError):
-                        os.killpg(self.proc.pid, signal.SIGKILL)
+                        if os.name == 'nt':
+                            self.proc.kill()
+                        else:
+                            os.killpg(self.proc.pid, signal.SIGKILL)
                     await self.proc.wait()
             if self.proc.stdin:
                 self.proc.stdin.close()

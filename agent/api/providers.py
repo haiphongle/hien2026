@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import time
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -30,12 +29,13 @@ from agent.services.cli_providers import (
     list_models,
     validate_role_entry,
     executable,
+    available,
 )
 from agent.services import ai_tasks
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
 logger = logging.getLogger(__name__)
-_PROVIDERS_FILE = Path(__file__).parent.parent / "providers.json"
+_PROVIDERS_FILE = config._PROVIDERS_FILE
 
 
 def _read() -> dict:
@@ -121,10 +121,10 @@ async def get_providers(live: bool = False):
     statuses = {}
     for name, binary in PROVIDER_BINARIES.items():
         resolved = executable(name)
-        installed = resolved is not None
-        tested, error = (await _probe_version(resolved)) if (live and installed) else (None, None)
+        installed = available(name)
+        tested, error = (await _probe_version(resolved)) if (live and installed and resolved) else (None, None)
         statuses[name] = {
-            "binary": binary,
+            "binary": binary or "Muse (gateway)",
             "installed": installed,
             "tested": tested,
             "error": error,
@@ -217,7 +217,7 @@ async def patch_providers(body: dict):
         provider = body["active"]
         if provider not in PROVIDER_BINARIES:
             raise HTTPException(400, f"Unknown provider '{provider}'. Known: {list(PROVIDER_BINARIES)}")
-        if not executable(provider):
+        if not available(provider):
             raise HTTPException(400, f"'{PROVIDER_BINARIES[provider]}' binary not found on PATH — install it first")
         data["active"] = provider
         # Switching the whole agent over has to carry the roles with it.

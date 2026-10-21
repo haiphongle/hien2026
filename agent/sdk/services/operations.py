@@ -350,7 +350,8 @@ class OperationService:
                         continue
                     mid = c.get("media_id")
                     if mid:
-                        valid_ids.append(mid)
+                        from agent.services.muse_media import flow_id
+                        valid_ids.append(await flow_id(mid, pid))
                         reference_labels.append(f"Reference image {len(valid_ids)} is {c['name']}.")
                     else:
                         missing_refs.append(c.get("slug") or c["name"])
@@ -418,6 +419,10 @@ class OperationService:
                         valid_ids.append(c["media_id"])
                 char_media_ids = valid_ids if valid_ids else None
 
+        from agent.services.muse_media import flow_id
+        src = await flow_id(src, pid)
+        if char_media_ids:
+            char_media_ids = [await flow_id(mid, pid) for mid in char_media_ids]
         return await self._client.edit_image(
             prompt=edit_prompt, source_media_id=src,
             project_id=pid, aspect_ratio=aspect,
@@ -465,6 +470,11 @@ class OperationService:
             logger.info("Video gen already submitted (op=%s), re-polling", existing_op[:30])
             operations = [{"operation": {"name": existing_op}, "status": "MEDIA_GENERATION_STATUS_PENDING"}]
             return await _poll_operations(self._client, operations)
+
+        from agent.services.muse_media import flow_id
+        image_media_id = await flow_id(image_media_id, pid)
+        if end_id:
+            end_id = await flow_id(end_id, pid)
 
         if omni or video_model == 'abra_i2v_8s':
             from agent.services.omni_flash import generate_omni_flash_first_frame_video
@@ -594,6 +604,8 @@ class OperationService:
             operations = [{"operation": {"name": existing_op}, "status": "MEDIA_GENERATION_STATUS_PENDING"}]
             return await _poll_operations(self._client, operations)
 
+        from agent.services.muse_media import flow_id
+        ref_ids = [await flow_id(mid, pid) for mid in ref_ids]
         submit_result = await self._client.generate_video_from_references(
             reference_media_ids=ref_ids,
             prompt=prompt,
@@ -635,6 +647,9 @@ class OperationService:
         video_media_id = scene.get(f"{prefix}_video_media_id")
         if not video_media_id:
             return {"error": f"No {prefix} video media_id for scene"}
+        from agent.services.muse_media import local_file
+        if local_file(video_media_id, '.mp4'):
+            return {"error": "Video Muse chưa hỗ trợ upscale qua Google Flow. Dùng bản xuất hiện có."}
 
         aspect = "VIDEO_ASPECT_RATIO_PORTRAIT" if orientation == "VERTICAL" else "VIDEO_ASPECT_RATIO_LANDSCAPE"
 

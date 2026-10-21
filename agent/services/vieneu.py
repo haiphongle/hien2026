@@ -99,7 +99,7 @@ class VieNeuWorker(ManagedTTSWorker):
                     reason = "Không kiểm tra được môi trường VieNeu."
             self._probe = {"available": available, "reason": reason}
             self._probe_time = time.monotonic()
-        ready = (VIENEU_CACHE_DIR / "ready.json").is_file()
+        ready = (self.cache_dir / "ready.json").is_file()
         return {**self._probe, "engine": "vieneu", "model": VIENEU_MODEL,
                 "sdk_version": SDK_VERSION, "sample_rate": 48000, "device": "CPU / ONNX FP32",
                 "model_downloaded": ready, "state": self.state, "error": self.error}

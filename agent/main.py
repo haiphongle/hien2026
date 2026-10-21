@@ -3,11 +3,15 @@ import asyncio
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 
 import websockets
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from agent.services import storage_locations
 
 from agent.config import API_HOST, API_PORT, WS_HOST, WS_PORT
 from agent.db.schema import init_db, close_db
@@ -18,6 +22,10 @@ from agent.api.editing import router as editing_router
 from agent.api.pacing import router as pacing_router
 from agent.api.timeline import router as timeline_router
 from agent.api.media_library import router as media_library_router
+from agent.api.content_library import router as content_library_router
+from agent.api.local_models import router as local_models_router
+from agent.api.storage_locations import router as storage_locations_router
+from agent.api.story_backgrounds import router as story_backgrounds_router
 from agent.api.scenes import router as scenes_router
 from agent.api.requests import router as requests_router
 from agent.api.flow import router as flow_router
@@ -31,6 +39,7 @@ from agent.api.materials import router as materials_router
 from agent.api.music import router as music_router
 from agent.api.models import router as models_router
 from agent.api.providers import router as providers_router
+from agent.api.muse import router as muse_router
 from agent.api.codex_auth import router as codex_auth_router
 from agent.api.prompt_suggestions import router as prompt_suggestions_router
 from agent.api.stickman import router as stickman_router
@@ -75,6 +84,7 @@ async def ws_handler(websocket):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    storage_locations.recover()
     await init_db()
 
     # Load custom materials from DB into in-memory registry
@@ -110,15 +120,28 @@ async def lifespan(app: FastAPI):
     worker_task = asyncio.create_task(controller.start())
     from agent.services import story_schedule
     schedule_task = asyncio.create_task(story_schedule.run())
+    from agent.web import watch_desktop_parent
+    parent_task = asyncio.create_task(watch_desktop_parent(getattr(app.state, 'stop_backend', None)))
+    from agent.services.muse_gateway import muse_gateway
+    try:
+        muse_gateway.startup()
+    except (OSError, ValueError):
+        logger.warning('Muse auto-start unavailable; open Settings to check the gateway.')
     logger.info("WS server + worker started")
 
     yield
 
+    await storage_locations.stop()
     schedule_task.cancel()
-    await asyncio.gather(schedule_task, return_exceptions=True)
+    parent_task.cancel()
+    await asyncio.gather(schedule_task, parent_task, return_exceptions=True)
+    from agent.services import content_production
+    await content_production.shutdown()
     controller.request_shutdown()
     from agent.services.codex_auth import codex_auth
     await codex_auth.shutdown()
+    from agent.services.codex_install import codex_installer
+    await codex_installer.cancel()
     from agent.services.media_jobs import shutdown as stop_media_jobs
     await stop_media_jobs()
     await controller.drain()
@@ -127,6 +150,7 @@ async def lifespan(app: FastAPI):
     from agent.services.speech_jobs import drain_jobs as drain_speech_jobs
     await drain_speech_jobs()
     await shutdown_vieneu()
+    await muse_gateway.shutdown()
     ws_server.close()
     await ws_server.wait_closed()
     worker_task.cancel()
@@ -136,9 +160,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FrameWeaver", version="1.3.1", lifespan=lifespan)
 
+_LOCAL_ORIGIN = r"(?:https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?|chrome-extension://[a-p]{32})"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=_LOCAL_ORIGIN,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -150,6 +176,10 @@ app.include_router(editing_router, prefix="/api")
 app.include_router(pacing_router, prefix="/api")
 app.include_router(timeline_router, prefix="/api")
 app.include_router(media_library_router, prefix="/api")
+app.include_router(content_library_router, prefix="/api")
+app.include_router(story_backgrounds_router, prefix="/api")
+app.include_router(local_models_router, prefix="/api")
+app.include_router(storage_locations_router, prefix="/api")
 app.include_router(scenes_router, prefix="/api")
 app.include_router(requests_router, prefix="/api")
 app.include_router(flow_router, prefix="/api")
@@ -163,10 +193,29 @@ app.include_router(materials_router, prefix="/api")
 app.include_router(music_router, prefix="/api")
 app.include_router(models_router)
 app.include_router(providers_router)
+app.include_router(muse_router)
 app.include_router(codex_auth_router)
 app.include_router(prompt_suggestions_router, prefix="/api")
 app.include_router(stickman_router, prefix="/api")
 app.include_router(active_project_router)
+
+
+@app.middleware('http')
+async def storage_guard(request: Request, call_next):
+    try:
+        error = storage_locations.request_error(request.method, request.url.path)
+    except (ValueError, OSError) as exc:
+        error = str(exc)
+    if error:
+        return JSONResponse(status_code=423, content={'detail':error})
+    writing = request.method not in {'GET','HEAD','OPTIONS'} and not request.url.path.startswith('/api/storage-locations')
+    if writing:
+        storage_locations.writers += 1
+    try:
+        return await call_next(request)
+    finally:
+        if writing:
+            storage_locations.writers -= 1
 
 
 import secrets as _secrets
@@ -214,14 +263,9 @@ async def health():
 @app.websocket("/ws/dashboard")
 async def dashboard_ws(websocket: WebSocket):
     """WebSocket endpoint for dashboard clients (Chrome extension side panel)."""
-    # Reject unexpected cross-origin connections. Remote dashboard access is
-    # opt-in because the API can spend Google Flow credits.
+    # Dashboard clients use the local server or the installed extension.
     origin = (websocket.headers.get("origin") or "").lower()
-    local_origin = any(origin.startswith(p) for p in (
-        "http://127.0.0.1", "http://localhost", "chrome-extension://",
-    ))
-    remote_allowed = os.environ.get("FLOWKIT_ALLOW_REMOTE_DASHBOARD", "0") == "1"
-    if origin and not local_origin and not remote_allowed:
+    if origin and re.fullmatch(_LOCAL_ORIGIN, origin) is None:
         await websocket.close(code=4003, reason="Origin not allowed")
         return
     await websocket.accept()
@@ -264,10 +308,22 @@ async def dashboard_ws(websocket: WebSocket):
         event_bus.unsubscribe(q)
 
 
+if os.environ.get("FRAMEWEAVER_WEB_DIR"):
+    from pathlib import Path
+    from agent.web import mount_dashboard
+    mount_dashboard(app, Path(os.environ["FRAMEWEAVER_WEB_DIR"]))
+
+
 if __name__ == "__main__":
     import os
     import uvicorn
     reload_enabled = os.environ.get("GLA_RELOAD", "0") == "1"
+    if os.name == 'nt' and os.environ.get('FRAMEWEAVER_DESKTOP') == '1':
+        from agent.main import app as desktop_app
+        server = uvicorn.Server(uvicorn.Config(desktop_app, host=API_HOST, port=API_PORT, loop='asyncio'))
+        desktop_app.state.stop_backend = lambda: setattr(server, 'should_exit', True)
+        server.run()
+        raise SystemExit(0)
     uvicorn.run(
         "agent.main:app",
         host=API_HOST,

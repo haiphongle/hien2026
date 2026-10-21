@@ -30,7 +30,7 @@ _COLUMNS = {
               "horizontal_upscale_url", "horizontal_upscale_media_id", "horizontal_upscale_status",
               "vertical_end_scene_media_id", "horizontal_end_scene_media_id",
               "trim_start", "trim_end", "duration", "display_order", "source", "transition_prompt", "narrator_text", "updated_at"},
-    "request": {"status", "request_id", "media_id", "output_url", "error_message", "retry_count", "next_retry_at", "source_media_id", "updated_at"},
+    "request": {"status", "request_id", "provider_signature", "media_id", "output_url", "error_message", "retry_count", "next_retry_at", "source_media_id", "updated_at"},
 }
 
 
@@ -262,14 +262,14 @@ async def list_characters_by_media_id(media_id: str) -> list[dict]:
 async def create_request(req_type: str, orientation: str = None,
                          scene_id: str = None, character_id: str = None,
                          project_id: str = None, video_id: str = None,
-                         source_media_id: str = None, video_model: str = None, **_kw) -> dict:
+                         source_media_id: str = None, video_model: str = None, provider: str = "flow", provider_model: str = None, **_kw) -> dict:
     db = await get_db()
     rid, now = _uuid(), _now()
     async with _db_lock:
         await db.execute(
-            """INSERT INTO request (id,project_id,video_id,scene_id,character_id,type,orientation,source_media_id,video_model,created_at,updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (rid, project_id, video_id, scene_id, character_id, req_type, orientation, source_media_id, video_model, now, now))
+            """INSERT INTO request (id,project_id,video_id,scene_id,character_id,type,orientation,source_media_id,video_model,provider,provider_model,created_at,updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (rid, project_id, video_id, scene_id, character_id, req_type, orientation, source_media_id, video_model, provider, provider_model, now, now))
         await db.commit()
     return await _get_with_db(db, "request", "id", rid)
 
@@ -298,7 +298,7 @@ async def list_pending_requests() -> list[dict]:
     return [dict(r) for r in await cur.fetchall()]
 
 
-async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5) -> list[dict]:
+async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5, provider: str = None) -> list[dict]:
     """Priority-ordered fetch of PENDING requests ready to process."""
     db = await get_db()
     now = _now()
@@ -327,7 +327,7 @@ async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5)
     """, (now,))
     rows = [dict(r) for r in await cur.fetchall()]
     # Exclude in-flight IDs
-    filtered = [r for r in rows if r["id"] not in exclude]
+    filtered = [r for r in rows if r["id"] not in exclude and (provider is None or r.get("provider", "flow") == provider)]
     return filtered[:limit]
 
 

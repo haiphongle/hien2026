@@ -114,6 +114,8 @@ def range_document(document, start=0, end=None):
                  duration=round((b-a)*document.fps)/document.fps)
         if c.get('overlay') and c['overlay']['entrance']:
             c['overlay']['entrance_offset'] += offset
+        if c['caption']['hop_interval']:
+            c['caption']['hop_offset'] += offset
         # Bake cropped fade/envelope values into the new envelope, preserving
         # the sound at the selection boundary rather than restarting a fade.
         points = {0., c['duration']}
@@ -146,11 +148,31 @@ def range_document(document, start=0, end=None):
     return TimelineDocument.model_validate(data)
 
 
-def caption_image(text, width, height, caption, output):
+def text_position(caption, elapsed=0):
+    """Deterministic steps: seeking and range exports retain the same position."""
+    step = math.floor((max(0, elapsed) + caption.hop_offset + 1e-7) / caption.hop_interval) % 5 if caption.hop_interval else 0
+    return [(caption.x, caption.y), (.2, .15), (.8, .15), (.8, .75), (.2, .75)][step]
+
+
+def caption_image(text, width, height, caption, output, elapsed=0):
     """Use the same glyph rasterizer for the browser and exported video."""
     import io
     buffer = io.BytesIO()
-    style = TextStyle.model_validate(caption.model_dump(exclude={'x', 'y'}))
+    style = TextStyle.model_validate({**caption.model_dump(exclude={'x', 'y', 'opacity', 'hop_interval', 'hop_offset', 'layout_size', 'box_width', 'box_height'}),
+                                     'size': caption.layout_size or caption.size})
+    if caption.box_width is not None:
+        bw, bh = max(1, round(width * caption.box_width)), max(1, round(height * caption.box_height))
+        cx, cy = text_position(caption, elapsed)
+        x, y = max(0, min(width - bw, round(width * cx - bw / 2))), max(0, min(height - bh, round(height * cy - bh / 2)))
+        overflow = editing.caption_image(text, width, height, style.model_copy(update={'size': caption.size}), buffer,
+                                        text_box=(x, y, bw, bh))
+        buffer.seek(0)
+        with Image.open(buffer) as rendered:
+            result = rendered.convert('RGBA')
+            if caption.opacity != 1:
+                result.putalpha(result.getchannel('A').point(lambda alpha: round(alpha * caption.opacity)))
+            result.save(output, 'PNG')
+        return {'x': x / width, 'y': y / height, 'width': bw / width, 'height': bh / height, 'overflow': overflow}
     editing.caption_image(text, width, height, style, buffer)
     buffer.seek(0)
     with Image.open(buffer) as rendered:
@@ -159,8 +181,17 @@ def caption_image(text, width, height, caption, output):
         bounds = None
         if box:
             cropped = rendered.crop(box)
-            x = max(0, min(width-cropped.width, round(width*caption.x-cropped.width/2)))
-            y = max(0, min(height-cropped.height, round(height*caption.y-cropped.height/2)))
+            if caption.layout_size:
+                scale = min(caption.size / caption.layout_size, width / cropped.width, height / cropped.height)
+                size = (max(1, min(width, round(cropped.width * scale))),
+                        max(1, min(height, round(cropped.height * scale))))
+                if size != cropped.size:
+                    cropped = cropped.resize(size, Image.Resampling.LANCZOS)
+            cx, cy = text_position(caption, elapsed)
+            x = max(0, min(width-cropped.width, round(width*cx-cropped.width/2)))
+            y = max(0, min(height-cropped.height, round(height*cy-cropped.height/2)))
+            if caption.opacity != 1:
+                cropped.putalpha(cropped.getchannel('A').point(lambda alpha: round(alpha * caption.opacity)))
             result.alpha_composite(cropped, (x, y))
             bounds = {'x': x/width, 'y': y/height, 'width': cropped.width/width, 'height': cropped.height/height}
         result.save(output, 'PNG')
@@ -174,13 +205,22 @@ async def caption_movie(document, work, length, update):
                 and c.text.strip() and c.start < length]
     if not captions:
         return None
-    boundaries = sorted({0., length, *(x for c in captions for x in (c.start, min(length, c.start+c.duration)))})
+    boundaries = {0., length, *(x for c in captions for x in (c.start, min(length, c.start+c.duration)))}
+    for c in captions:
+        interval = c.caption.hop_interval
+        if interval:
+            first = math.floor(c.caption.hop_offset / interval) + 1
+            last = math.ceil((c.caption.hop_offset + c.duration) / interval)
+            for step in range(first, last):
+                at = math.ceil((c.start + step * interval - c.caption.hop_offset - 1e-7) * document.fps) / document.fps
+                if c.start < at < min(length, c.start + c.duration):
+                    boundaries.add(at)
+    boundaries = sorted(boundaries)
     events = sorted([(c.start, 1, i, c) for i, c in enumerate(captions)] +
                     [(c.start+c.duration, 0, i, c) for i, c in enumerate(captions)], key=lambda e: e[:3])
     cursor, visible = 0, {}
-    lines = []
+    lines, rendered = [], {}
     for index, (a, b) in enumerate(zip(boundaries, boundaries[1:])):
-        path = work / f'caption{index}.png'
         while cursor < len(events) and events[cursor][0] <= a+1e-6:
             _, entering, order, clip = events[cursor]
             if entering:
@@ -189,21 +229,25 @@ async def caption_movie(document, work, length, update):
                 visible.pop(order, None)
             cursor += 1
         active = [visible[i] for i in sorted(visible)]
+        signature = tuple((i, text_position(visible[i].caption, a-visible[i].start)) for i in sorted(visible))
+        path = rendered.get(signature, work / f'caption{index}.png')
         def draw():
             composite = Image.new('RGBA', (document.width, document.height))
             for c in active:
                 import io
                 buffer = io.BytesIO()
-                caption_image(c.text, document.width, document.height, c.caption, buffer)
+                caption_image(c.text, document.width, document.height, c.caption, buffer, elapsed=a-c.start)
                 buffer.seek(0)
                 with Image.open(buffer) as layer:
                     composite.alpha_composite(layer)
             composite.save(path, 'PNG')
-        await asyncio.to_thread(draw)
+        if signature not in rendered:
+            await asyncio.to_thread(draw)
+            rendered[signature] = path
         lines.extend([f"file '{path.name}'", f'option framerate {document.fps}', f'duration {b-a:.9f}'])
         if index % 20 == 0:
             update(stage=f'Vẽ chữ và phụ đề · {index+1}/{len(boundaries)-1}', progress=80+round(5*(index+1)/(len(boundaries)-1)))
-    lines.extend([f"file 'caption{len(boundaries)-2}.png'", f'option framerate {document.fps}'])
+    lines.extend([f"file '{path.name}'", f'option framerate {document.fps}'])
     manifest = work / 'captions.txt'; manifest.write_text('\n'.join(lines))
     output = work / 'captions.mov'
     # Only server-generated UUID paths are written above; safe=0 permits the

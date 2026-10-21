@@ -13,7 +13,7 @@ import time
 from uuid import uuid4
 
 from agent.config import BASE_DIR
-from agent.services import editing, imported_video, media_jobs as jobs, speech, speech_store as store, transcription
+from agent.services import editing, imported_video, media_jobs as jobs, model_storage, speech, speech_store as store, transcription
 from agent.services.ffmpeg_progress import processing_timeout
 from agent.services.speech_analysis_core import assign_turns, recognized_cue
 from agent.services.tts_runtime import TTS_SEMAPHORE
@@ -25,6 +25,13 @@ EMBEDDING = MODELS / "embedding.onnx"
 REPORTS = ("signal_speech", "signal_export", "words", "speakers")
 KINDS = {"analysis_signal", "analysis_words", "analysis_speakers"}
 logger = logging.getLogger(__name__)
+
+
+def speaker_model_paths():
+    root = model_storage.location('diarization', MODELS, preserve_existing=True)
+    names = [path.relative_to(MODELS) for path in (SEGMENTATION, EMBEDDING)]
+    model_storage.assert_weights('diarization', root, names)
+    return [root/name for name in names]
 
 
 def export_source(vid):
@@ -39,8 +46,13 @@ def export_source(vid):
 
 def capabilities():
     measurement = all(importlib.util.find_spec(module) for module in ("numpy", "soundfile"))
+    try:
+        speaker_model_paths()
+        speakers_ready = True
+    except ValueError:
+        speakers_ready = False
     return {"signal_ready": measurement,
-            "speakers_ready": bool(measurement and importlib.util.find_spec("sherpa_onnx") and SEGMENTATION.is_file() and EMBEDDING.is_file()),
+            "speakers_ready": bool(measurement and importlib.util.find_spec("sherpa_onnx") and speakers_ready),
             "models": transcription.models(), "whisper_available": bool(transcription.binary())}
 
 
@@ -204,7 +216,7 @@ async def recognize(items, model, language, work, update, *, cpu=False, minimum_
                 if match:
                     update(progress=10 + round((completed + int(match[1]) / 100) / total * 85))
         update(stage=f"Whisper đang nghe lại lời đọc · {offset}/{total} câu", progress=10 + round(offset / total * 85))
-        args = [transcription.binary(), "-m", str(transcription.MODEL_DIR / f"ggml-{model}.bin"),
+        args = [transcription.binary(), "-m", str(transcription.model_path(model)),
                 "-l", language, "-ojf", "-pp", "-t", "4"]
         if cpu:
             args.append("-ng")
@@ -236,7 +248,8 @@ def start(vid, doc, scenes, request):
     if not available["signal_ready"]:
         raise ValueError("Chưa có thư viện kiểm tra âm thanh. Cài requirements-speech-analysis.txt vào môi trường FrameWeaver.")
     if kind == "speakers" and not available["speakers_ready"]:
-        raise ValueError("Chưa có bộ nhận diện người nói. Xem hướng dẫn trong docs/speech-analysis.md.")
+        speaker_model_paths()  # Preserve the actionable missing/offline storage error.
+        raise ValueError("Chưa có thư viện phân biệt người nói. Xem hướng dẫn trong docs/speech-analysis.md.")
     if kind in {"words", "speakers"} or target == "speech":
         if not doc.cues or not doc.revision:
             raise ValueError("Nhận dạng hoặc nhập lời thoại rồi lưu kịch bản trước.")
@@ -258,6 +271,8 @@ def start(vid, doc, scenes, request):
         update(stage="Chờ lượt phân tích âm thanh")
         # Shares the model slot with Whisper/TTS, keeping memory use bounded.
         async with TTS_SEMAPHORE:
+            # Re-resolve after waiting: a pending relocation may have finished.
+            speaker_paths = speaker_model_paths() if kind == 'speakers' else None
             with tempfile.TemporaryDirectory(prefix="analysis-", dir=jobs.directory(vid)) as temp:
                 work = Path(temp)
                 result = {"key": key, "revision": doc.revision, "fingerprint": signature,
@@ -278,8 +293,8 @@ def start(vid, doc, scenes, request):
                     result.update(model=request.model, language=request.language, cues=cues)
                 else:
                     wav = await source_audio(vid, scenes, work, update)
-                    turns = await worker({"mode": "speakers", "wav": str(wav), "segmentation": str(SEGMENTATION),
-                                          "embedding": str(EMBEDDING), "num_speakers": request.num_speakers}, work, update)
+                    turns = await worker({"mode": "speakers", "wav": str(wav), "segmentation": str(speaker_paths[0]),
+                                          "embedding": str(speaker_paths[1]), "num_speakers": request.num_speakers}, work, update)
                     if not turns:
                         raise ValueError("Không tìm thấy lượt nói rõ ràng. Kiểm tra nguồn hoặc gán người nói thủ công.")
                     result.update(assign_turns(doc.model_dump(mode="json")["cues"], turns))

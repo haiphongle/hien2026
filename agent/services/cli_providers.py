@@ -31,6 +31,7 @@ PROVIDER_BINARIES = {
     "claude": "claude",
     "agy": "agy",
     "codex": "codex",
+    "muse2api": None,
 }
 
 # Reasoning-effort ladders, as each CLI actually accepts them. agy's own help
@@ -39,6 +40,7 @@ PROVIDER_BINARIES = {
 # (`supported_reasoning_levels` in its cache) — this is the union, and codex
 # itself rejects a level its chosen model does not support.
 PROVIDER_EFFORTS = {
+    "muse2api": (),
     "claude": ("low", "medium", "high", "xhigh", "max"),
     "agy": ("low", "medium", "high"),
     "codex": ("low", "medium", "high", "xhigh", "max"),
@@ -52,6 +54,7 @@ PROVIDER_EFFORTS = {
 # claude-sonnet-4-6"). Even a *matching* pair only restates the slug. So for
 # agy, effort is what you set when you have NOT picked a model.
 PROVIDER_MODEL_ENCODES_EFFORT = {
+    "muse2api": False,
     "claude": False,
     "agy": True,
     "codex": False,
@@ -63,6 +66,7 @@ PROVIDER_MODEL_ENCODES_EFFORT = {
 # slugs newer than whatever its on-disk cache happens to hold — for those two,
 # an unlisted value is a legitimate escape hatch, not a typo to reject.
 PROVIDER_CATALOG_IS_AUTHORITATIVE = {
+    "muse2api": False,
     "claude": False,
     "agy": True,
     "codex": False,
@@ -103,7 +107,18 @@ def executable(provider: str) -> str | None:
     binary = PROVIDER_BINARIES.get(provider)
     if not binary:
         return None
-    return shutil.which(binary) or (str(_CODEX_APP) if provider == "codex" and _CODEX_APP.is_file() else None)
+    found = shutil.which(binary) or (str(_CODEX_APP) if provider == "codex" and _CODEX_APP.is_file() else None)
+    if not found and provider == 'codex':
+        from agent.services.codex_install import executable as managed_codex
+        found = managed_codex()
+    return found
+
+def available(provider: str) -> bool:
+    if provider == 'muse2api':
+        from agent.services.muse_settings import configured
+        return configured()
+    return bool(executable(provider))
+
 
 DEFAULT_PROVIDER = "claude"
 
@@ -117,7 +132,7 @@ _catalog_cache: dict[str, tuple[float, list[dict]]] = {}
 # ── role resolution ───────────────────────────────────────────
 
 
-def resolve_role(role: str) -> dict:
+def resolve_role(role: str, selected: str | None = None) -> dict:
     """Return {provider, model, effort} for `role`.
 
     Never raises and never returns an unusable provider: a role naming a
@@ -152,6 +167,10 @@ def resolve_role(role: str) -> dict:
         logger.warning("Dropping unusable model %r for role %r", model, role)
         model = None
 
+    if selected and selected != 'configured' and selected != provider:
+        if selected not in PROVIDER_BINARIES:
+            raise ValueError('Nhà cung cấp AI không hợp lệ.')
+        return {'provider': selected, 'model': None, 'effort': None}
     return {"provider": provider, "model": model, "effort": effort}
 
 
@@ -172,7 +191,9 @@ async def validate_role_entry(role: str, entry: dict) -> dict:
         raise ValueError(
             f"Unknown provider '{provider}' for role '{role}'. Known: {sorted(PROVIDER_BINARIES)}"
         )
-    if not executable(provider):
+    if not available(provider):
+        if provider == 'muse2api':
+            raise ValueError('Muse chưa cấu hình. Mở Cài đặt → Muse để kết nối gateway.')
         raise ValueError(
             f"'{PROVIDER_BINARIES[provider]}' binary not found on PATH — install it first"
         )
@@ -299,11 +320,14 @@ async def list_models(provider: str, force: bool = False) -> list[dict]:
         if hit and now - hit[0] < _CATALOG_TTL_S:
             return list(hit[1])
 
-    if not executable(provider):
+    if not available(provider):
         return []
 
     try:
-        if provider == "agy":
+        if provider == 'muse2api':
+            from agent.services.muse_client import MuseClient
+            models = [m for m in await MuseClient().models() if m.get('kind') == 'chat']
+        elif provider == "agy":
             models = await _list_agy_models()
         elif provider == "codex":
             models = await asyncio.to_thread(_list_codex_models)

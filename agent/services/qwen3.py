@@ -123,7 +123,7 @@ def audio_warning(path, text, language, speed=1, duration=None):
     return None
 
 
-def check_audio(path, text, language, speed, callback=None):
+def check_audio(path, text, language, speed, callback=None, *, cancel_event=None, preview=False):
     """Reuse signal/word analysis for suspicious output, then persist its verdict."""
     from agent.services import speech_store as store, speech_analysis, transcription
     from agent.services.speech_analysis_core import inspect_signal, union_seconds
@@ -139,7 +139,7 @@ def check_audio(path, text, language, speed, callback=None):
             raise ValueError("Âm thanh không có tiếng rõ. Thử tạo lại hoặc chọn giọng khác.")
         if short_audio(text, duration - silence, language, speed):
             model = next((name for name in ("small", "base", "large-v3-turbo-q5_0")
-                          if (transcription.MODEL_DIR / f"ggml-{name}.bin").is_file()), None)
+                          if transcription.model_path(name).is_file()), None)
             if not model or not transcription.binary():
                 raise ValueError("Tiếng quá ngắn, có thể đọc thiếu. Cần Whisper đã cài để đối chiếu; hoặc chọn giọng khác.")
             if callback:
@@ -153,8 +153,23 @@ def check_audio(path, text, language, speed, callback=None):
                 item = {"id": "quality", "path": str(wav), "text": text, "duration": duration,
                         "start": 0, "end": duration}
                 # CPU avoids competing with the resident TTS model on Apple MPS.
-                checked = asyncio.run(speech_analysis.recognize([item], model, language, work,
-                    lambda **changes: None, cpu=True, minimum_timeout=180))[0]
+                async def recognize():
+                    task = asyncio.create_task(speech_analysis.recognize([item], model, language, work,
+                        lambda **changes: None, cpu=True, minimum_timeout=60 if preview else 180))
+                    deadline = time.monotonic() + 60 if preview else None
+                    try:
+                        while not task.done():
+                            if cancel_event and cancel_event.is_set():
+                                raise InterruptedError('Đã dừng tạo demo.')
+                            if deadline is not None and time.monotonic() >= deadline:
+                                raise TimeoutError('Đối chiếu lời đọc quá thời gian. Thử lại mẫu hoặc chọn giọng khác.')
+                            await asyncio.wait({task}, timeout=.2)
+                        return await task
+                    finally:
+                        if not task.done():
+                            task.cancel()
+                        await asyncio.gather(task, return_exceptions=True)
+                checked = asyncio.run(recognize())[0]
                 quality.update(recognized=checked["recognized"], difference=checked["difference"])
                 if checked["needs_review"]:
                     raise ValueError("Lời đọc có thể thiếu hoặc sai câu theo kết quả nhận dạng. Thử tạo lại hoặc chọn giọng khác.")
@@ -191,7 +206,7 @@ class Qwen3Worker(ManagedTTSWorker):
     def _item_timeout(self, item):
         # Bound runaway decoding without returning a clipped, incomplete sentence.
         # Loading/download has its own longer timeout in the shared runner.
-        return min(1800, max(300, len(item["text"]) * 8))
+        return 180 if item.get('preview') else min(1800, max(300, len(item["text"]) * 8))
 
     def generate(self, args, callback=None):
         payload = {**args, "items": [{**item, "max_audio_seconds": max_audio_seconds(item["text"])}
@@ -203,7 +218,8 @@ class Qwen3Worker(ManagedTTSWorker):
                 continue
             item = items[result["id"]]
             error = check_audio(Path(item["output"]), item["text"], args["identity"]["language"],
-                                float(item.get("speed", args.get("speed", 1))), callback)
+                                float(item.get("speed", args.get("speed", 1))), callback,
+                                cancel_event=args.get('cancel_event'), preview=item.get('preview', False))
             if error:
                 result.update(ok=False, error=error)
         return results
@@ -212,11 +228,14 @@ class Qwen3Worker(ManagedTTSWorker):
         if self._probe is None or time.monotonic() - self._probe_time > 30:
             executable = shutil.which(self.python)
             available, device, downloaded = False, "Tự nhận diện", False
-            if executable and self.cache_dir.exists():
+            reason = "Chưa có Python trong môi trường Qwen3. Cài lại môi trường riêng."
+            if executable:
+                reason = "Không đọc được môi trường Qwen3. Kiểm tra Python và quyền đọc ổ chứa môi trường."
                 try:
                     probe = subprocess.run([executable, "-I", "-c",
                                             "import importlib.metadata as m, importlib.util as u, json, sys\n"
-                                            "assert all(u.find_spec(name) for name in ('torch', 'qwen_tts', 'soundfile', 'librosa', 'accelerate', 'torchaudio', 'onnxruntime', 'einops'))\n"
+                                            "missing = [name for name in ('torch', 'qwen_tts', 'soundfile', 'librosa', 'accelerate', 'torchaudio', 'onnxruntime', 'einops') if u.find_spec(name) is None]\n"
+                                            "if missing: sys.exit('missing:' + ', '.join(missing))\n"
                                             "try:\n ready = json.load(open(sys.argv[1]))\n"
                                             "except (OSError, ValueError):\n ready = {}\n"
                                             "print(m.version('qwen-tts')); print(json.dumps(ready))",
@@ -224,16 +243,23 @@ class Qwen3Worker(ManagedTTSWorker):
                                            capture_output=True, text=True, timeout=10)
                     lines = probe.stdout.strip().splitlines()
                     available = probe.returncode == 0 and len(lines) == 2 and lines[0] == SDK_VERSION
+                    error = (probe.stderr or "").strip()
+                    if error.startswith("missing:"):
+                        reason = "Thiếu thư viện Qwen3: " + error.removeprefix("missing:") + ". Cài lại bằng gói thông thường, không dùng editable."
+                    elif probe.returncode == 0 and lines and lines[0] != SDK_VERSION:
+                        reason = f"Cần qwen-tts {SDK_VERSION} trong môi trường riêng."
                     if available:
                         ready = json.loads(lines[1])
                         if isinstance(ready, dict):
                             downloaded = ready.get("model") == self.model and ready.get("sdk") == SDK_VERSION
                             if downloaded:
                                 device = ready.get("device", device)
-                except (OSError, ValueError, subprocess.TimeoutExpired):
-                    pass
+                except subprocess.TimeoutExpired:
+                    reason = "Kiểm tra môi trường Qwen3 quá thời gian. Thử tải lại thư viện giọng."
+                except (OSError, ValueError):
+                    reason = "Không đọc được môi trường Qwen3. Kiểm tra Python và quyền đọc ổ chứa môi trường."
             self._probe = {"available": available, "device": device, "model_downloaded": downloaded,
-                           "reason": None if available else "Chưa đọc được Qwen3-TTS. Kiểm tra ổ chứa model và quyền đọc ổ ngoài của Python trong macOS."}
+                           "reason": None if available else reason}
             self._probe_time = time.monotonic()
         return {**self._probe, "engine": "qwen3", "model": QWEN3_MODEL, "sdk_version": SDK_VERSION,
                 "sample_rate": 24000,

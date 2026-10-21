@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+<title>FrameWeaver</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#101018;color:#f3f1ff;font:15px -apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;display:grid;place-items:center}
+  main{max-width:680px;padding:56px} .mark{background:#8055ee;border-radius:18px;width:64px;height:64px;display:grid;place-items:center;font-size:24px;font-weight:800}
+  h1{font-size:34px;letter-spacing:-1px;margin:22px 0 8px}p{color:#aaa7be;line-height:1.65}#status{border:1px solid #343044;background:#1a1726;border-radius:14px;padding:20px;margin:26px 0;white-space:pre-line;line-height:1.6}
+  button{background:#8255ee;border:0;color:white;padding:12px 18px;border-radius:10px;font:inherit;cursor:pointer;margin:0 8px 10px 0}button.secondary{background:#292438}button[hidden]{display:none}.small{font-size:13px}
+</style>
+<main><div class="mark">FW</div><h1>FrameWeaver</h1><p>Không gian dựng và sản xuất video của bạn.</p>
+<div id="status" role="status">Đang chuẩn bị ứng dụng…</div>
+<button data-action="retry" hidden>Thử lại</button><button data-action="reuse" hidden>Mở phiên đang chạy</button>
+<button class="secondary" data-action="logs">Mở nhật ký</button><button class="secondary" data-action="data">Thư mục dữ liệu</button>
+<p class="small">Lần đầu sử dụng: vào Cài đặt để kết nối AI. Google Flow cần Chrome và extension; các model giọng nói lớn được cài riêng. Xem hướng dẫn trong menu Trợ giúp.</p>
+</main><script src="startup.cjs"></script>
+</html>
